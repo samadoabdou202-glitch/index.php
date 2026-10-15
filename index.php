@@ -6,7 +6,7 @@ ini_set('display_errors', 0);
 error_reporting(0);
 
 // التحقق من تسجيل الدخول
-$password_correct = 'abdssamed2000';
+$password_correct = 'abdssamed00';
 
 if (isset($_POST['login_password'])) {
     if ($_POST['login_password'] === $password_correct) {
