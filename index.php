@@ -10,7 +10,7 @@ $password_hash = password_hash('abdo00', PASSWORD_DEFAULT);
 
 // التحقق من تسجيل الدخول
 if (isset($_POST['login_password'])) {
-    if ($_POST['login_password'] === 'aziz123') {
+    if ($_POST['login_password'] === 'abdo00') {
         $_SESSION['is_logged_in'] = true;
         header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
         exit();
