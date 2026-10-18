@@ -6,11 +6,11 @@ error_reporting(0);
 
 // بدء الجلسة لحماية لوحة التحكم بكلمة مرور
 session_start();
-$password_hash = password_hash('aziz123', PASSWORD_DEFAULT);
+$password_hash = password_hash('abdssamed00', PASSWORD_DEFAULT);
 
 // التحقق من تسجيل الدخول
 if (isset($_POST['login_password'])) {
-    if ($_POST['login_password'] === 'aziz123') {
+    if ($_POST['login_password'] === 'abdssamed00') {
         $_SESSION['is_logged_in'] = true;
         header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
         exit();
